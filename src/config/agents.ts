@@ -4,20 +4,20 @@
 export const AGENT_CONFIG = {
   // 题目生成器 Agent
   exerciseGenerator: {
-    agent_id: 15,
-    api_key: '$2a$10$U6rSVHuwyPN6ZEKrPhhMuOTbkKpUlyQCNJ82XLLWu2hpyZtXjqkDm',
+    agent_id: 1,
+    api_key: '$2a$10$gbpjZYyprHG2zWc.O5Gjaeip09MWFhdSlIn/jv2FyYv4yDEJfCA/m',
     name: 'AILearn-题目生成器',
   },
   // 代码评判官 Agent
   codeJudge: {
-    agent_id: 16,
-    api_key: '$2a$10$j7X5twXAsFa6A4wyXAfMx.M2R77heBqXqUnfLzoT2HcBTHoBpoVVa',
+    agent_id: 2,
+    api_key: '$2a$10$ZPZeAeUxrysHNjmsiYtMy.ipQXtUzTF9vJg1oh2OgusvISXspGwmC',
     name: 'AILearn-代码评判官',
   },
   // 教学助手 Agent
   teachingAssistant: {
-    agent_id: 17,
-    api_key: '$2a$10$W02ez9WzdSxfcKtL.svgte172ObCYeOzpMtKfBAA25YWCsREWvcdO',
+    agent_id: 3,
+    api_key: '$2a$10$jiubMvYKzSrVLTZLY0zz2O1G5GGpHj1w./xO5E0k/HM8urCy0cGc2',
     name: 'AILearn-教学助手',
   },
 } as const;
