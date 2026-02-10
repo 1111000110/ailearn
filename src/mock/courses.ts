@@ -1,4 +1,4 @@
-import type { Subject, Chapter } from '../types/course';
+import type { Subject, Chapter, Exercise } from '../types/course';
 
 // ==================== 科目列表 ====================
 export const subjects: Subject[] = [
