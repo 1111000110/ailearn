@@ -7,7 +7,7 @@ import {
   ArrowRightOutlined,
 } from '@ant-design/icons';
 import { useTheme } from '../../contexts/ThemeContext';
-import { subjects } from '../../mock/courses';
+import { subjects } from '../../config/subjects';
 
 const { Title, Paragraph } = Typography;
 

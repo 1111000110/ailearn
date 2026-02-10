@@ -29,12 +29,12 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTheme } from '../../contexts/ThemeContext';
-import { subjects } from '../../mock/courses';
 import { runAgentStream } from '../../api/agent';
 import type { StreamClient } from '../../api/agent';
 import type { RunAgentStreamResp } from '../../types/agent';
 import type { Exercise, Difficulty } from '../../types/course';
 import { AGENT_CONFIG, SUBJECT_LANGUAGE_MAP, SUBJECT_PROMPT_MAP } from '../../config/agents';
+import { subjects } from '../../config/subjects';
 import CodeEditor from '../../components/CodeEditor';
 
 const { Text } = Typography;
