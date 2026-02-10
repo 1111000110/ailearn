@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Shell 教程 + 代码编辑 + 提问 原型</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#0f1a2e;
+      --panel2:#0c1628;
+      --stroke:rgba(255,255,255,.10);
+      --stroke2:rgba(255,255,255,.18);
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.68);
+      --accent:#6ee7ff;
+      --good:#22c55e;
+      --warn:#f59e0b;
+
+      --handle:10px;
+      --minCol:240px;
+      --minOut:120px;
+      --minEditor:180px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      background: radial-gradient(1200px 600px at 30% 10%, rgba(110,231,255,.10), transparent 55%),
+                  radial-gradient(900px 500px at 80% 30%, rgba(34,197,94,.08), transparent 55%),
+                  var(--bg);
+      color:var(--text);
+      overflow:hidden;
+    }
+
+    /* 顶部栏 */
+    .topbar{
+      height:56px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:0 14px;
+      border-bottom:1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.03), transparent);
+    }
+    .brand{display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px;}
+    .dot{
+      width:12px;height:12px;border-radius:999px;
+      background: radial-gradient(circle at 30% 30%, #fff, var(--accent));
+      box-shadow:0 0 18px rgba(110,231,255,.35);
+    }
+    .tag{
+      font-size:12px;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      color:var(--muted);
+      background: rgba(255,255,255,.02);
+      white-space:nowrap;
+    }
+    .pill{
+      margin-left:auto;
+      display:flex; align-items:center; gap:8px;
+      padding:8px 10px;
+      border:1px solid var(--stroke);
+      border-radius:999px;
+      background: rgba(255,255,255,.03);
+      color:var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .btn{
+      display:inline-flex; align-items:center; gap:8px;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.04);
+      color:var(--text);
+      padding:8px 10px;
+      border-radius:10px;
+      cursor:pointer;
+      user-select:none;
+    }
+    .btn:hover{border-color:var(--stroke2); background: rgba(255,255,255,.06)}
+    .kbd{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size:12px;
+      padding:2px 6px;
+      border:1px solid var(--stroke);
+      border-bottom-color:rgba(255,255,255,.28);
+      border-radius:8px;
+      background: rgba(0,0,0,.25);
+      color: rgba(255,255,255,.85);
+    }
+
+    /* 主体三栏 */
+    .app{height:calc(100% - 56px); display:flex; position:relative;}
+    .col{
+      height:100%;
+      min-width:var(--minCol);
+      overflow:hidden;
+      border-right:1px solid var(--stroke);
+      background: rgba(255,255,255,.02);
+    }
+    .col:last-child{border-right:none}
+
+    /* 列间拖条 */
+    .v-handle{
+      width:var(--handle);
+      cursor:col-resize;
+      position:relative;
+      z-index:5;
+      background: transparent;
+    }
+    .v-handle::before{
+      content:"";
+      position:absolute; inset:0;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent);
+      opacity:.9;
+    }
+    .v-handle::after{
+      content:"";
+      position:absolute;
+      top:50%; left:50%;
+      width:2px; height:42px;
+      transform:translate(-50%,-50%);
+      border-radius:999px;
+      background: rgba(255,255,255,.22);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.2);
+    }
+
+    /* 面板通用 */
+    .panel{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      background: linear-gradient(180deg, rgba(255,255,255,.03), transparent 38%),
+                  var(--panel2);
+    }
+    .panelHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      padding:12px 12px;
+      border-bottom:1px solid var(--stroke);
+      background: rgba(255,255,255,.02);
+    }
+    .panelTitle{display:flex; align-items:center; gap:10px; font-weight:650;}
+    .panelBody{flex:1; overflow:auto; padding:12px;}
+
+    .card{
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.03);
+      border-radius:14px;
+      padding:12px;
+      margin-bottom:10px;
+    }
+    .card h4{margin:0 0 6px; font-size:14px;}
+    .card p{margin:0; color:var(--muted); line-height:1.55; font-size:13px;}
+
+    .monoBox{
+      margin-top:10px;
+      border:1px solid rgba(255,255,255,.12);
+      background: rgba(0,0,0,.22);
+      border-radius:14px;
+      padding:10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size:12.5px;
+      line-height:1.6;
+      color: rgba(255,255,255,.86);
+      white-space:pre-wrap;
+      word-break:break-word;
+    }
+    .hl{color: rgba(110,231,255,.95)}
+    .ok{color: rgba(34,197,94,.95)}
+    .warn{color: rgba(245,158,11,.95)}
+    .muted{color: rgba(255,255,255,.68)}
+
+    /* 中间：编辑 + 输出 */
+    .midWrap{height:100%; display:flex; flex-direction:column; background: var(--panel);}
+    .editorArea{
+      min-height:var(--minEditor);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+      border-bottom:1px solid var(--stroke);
+    }
+    .outArea{
+      min-height:var(--minOut);
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+    .h-handle{
+      height:var(--handle);
+      cursor:row-resize;
+      position:relative;
+      z-index:6;
+      background: transparent;
+    }
+    .h-handle::before{
+      content:"";
+      position:absolute; inset:0;
+      background: linear-gradient(180deg, transparent, rgba(255,255,255,.08), transparent);
+    }
+    .h-handle::after{
+      content:"";
+      position:absolute;
+      top:50%; left:50%;
+      width:42px; height:2px;
+      transform:translate(-50%,-50%);
+      border-radius:999px;
+      background: rgba(255,255,255,.22);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.2);
+    }
+
+    .toolbar{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-bottom:1px solid var(--stroke);
+      background: rgba(255,255,255,.02);
+    }
+    .toolbar .left{display:flex; align-items:center; gap:10px; flex:1; color:var(--muted); font-size:12px;}
+    .toolbar .right{display:flex; gap:8px;}
+    .statusDot{width:8px;height:8px;border-radius:999px;background: var(--good); box-shadow:0 0 14px rgba(34,197,94,.35);}
+
+    textarea.code{
+      flex:1;
+      width:100%;
+      resize:none;
+      border:none;
+      outline:none;
+      background: transparent;
+      color: rgba(255,255,255,.92);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size:13px;
+      line-height:1.55;
+      padding:12px;
+      overflow:auto;
+      tab-size:2;
+    }
+
+    .output{
+      flex:1;
+      width:100%;
+      padding:12px;
+      overflow:auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      font-size:12.5px;
+      line-height:1.6;
+      color: rgba(255,255,255,.86);
+      background: rgba(0,0,0,.22);
+    }
+    .outLine{color: rgba(255,255,255,.78)}
+    .outOk{color: rgba(34,197,94,.95)}
+    .outWarn{color: rgba(245,158,11,.95)}
+    .outErr{color: rgba(239,68,68,.95)}
+
+    /* 右侧提问区 */
+    .chatBox{display:flex; flex-direction:column; height:100%; overflow:hidden; background: var(--panel2);}
+    .chatStream{flex:1; overflow:auto; padding:12px; display:flex; flex-direction:column; gap:10px;}
+    .bubble{
+      max-width:92%;
+      border:1px solid var(--stroke);
+      background: rgba(255,255,255,.03);
+      border-radius:16px;
+      padding:10px 10px;
+      font-size:13px;
+      color: rgba(255,255,255,.88);
+      line-height:1.55;
+    }
+    .bubble.me{align-self:flex-end; background: rgba(110,231,255,.08); border-color: rgba(110,231,255,.22);}
+    .bubble.ai{align-self:flex-start;}
+    .composer{
+      border-top:1px solid var(--stroke);
+      padding:10px;
+      display:flex;
+      gap:8px;
+      background: rgba(255,255,255,.02);
+    }
+    .composer input{
+      flex:1;
+      border:1px solid var(--stroke);
+      background: rgba(0,0,0,.18);
+      color: rgba(255,255,255,.9);
+      padding:10px 10px;
+      border-radius:12px;
+      outline:none;
+      font-size:13px;
+    }
+    .composer input:focus{border-color: rgba(110,231,255,.30)}
+    .send{
+      border:1px solid rgba(110,231,255,.28);
+      background: rgba(110,231,255,.10);
+      color: rgba(255,255,255,.92);
+      padding:10px 12px;
+      border-radius:12px;
+      cursor:pointer;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .send:hover{background: rgba(110,231,255,.14)}
+
+    .noselect, .noselect *{user-select:none !important; cursor:grabbing !important;}
+
+    .tooNarrow{
+      display:none;
+      position:absolute;
+      inset:0;
+      background: rgba(0,0,0,.75);
+      backdrop-filter: blur(10px);
+      z-index:50;
+      padding:18px;
+      color: rgba(255,255,255,.92);
+    }
+    @media (max-width: 980px){ .tooNarrow{display:block} }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      <div class="dot"></div>
+      <div>Shell 训练工坊 · Prototype</div>
+      <span class="tag">左：命令教程+解释+题目 / 中：写答案+输出 / 右：问 AI</span>
+    </div>
+
+    <div class="btn" id="btnReset" title="恢复默认布局">重置布局 <span class="kbd">R</span></div>
+    <div class="pill">可拖动分隔条调整三栏 + 输出区高度</div>
+  </div>
+
+  <div class="app" id="app">
+    <!-- 左：Shell 教程（命令 + 解释 + 题目要求） -->
+    <section class="col" id="colLeft">
+      <div class="panel">
+        <div class="panelHeader">
+          <div class="panelTitle">Shell 命令教程 <span class="tag">练习说明</span></div>
+          <div class="btn" title="切换题目（示意）">下一题</div>
+        </div>
+
+        <div class="panelBody">
+          <!-- 1) 命令教程 -->
+          <div class="card">
+            <h4>本节命令：<span class="hl">grep</span> / <span class="hl">wc</span> / <span class="hl">sort</span></h4>
+            <p>目标：学会用管道把多个命令组合起来，完成一次「检索 → 统计 → 排序」的小任务。</p>
+            <div class="monoBox"><span class="hl">grep</span> -n "ERROR" app.log
+<span class="hl">grep</span> -c "ERROR" app.log
+<span class="hl">wc</span> -l app.log
+<span class="hl">sort</span> -nr counts.txt</div>
+          </div>
+
+          <!-- 2) 命令解释 -->
+          <div class="card">
+            <h4>命令解释</h4>
+            <div class="monoBox"><span class="hl">grep</span> -n  : 输出匹配行并带行号
+<span class="hl">grep</span> -c  : 只输出匹配行的数量
+<span class="hl">wc</span> -l    : 统计行数
+<span class="hl">sort</span> -n  : 按数字排序
+<span class="hl">sort</span> -r  : 逆序（从大到小）
+管道 <span class="hl">|</span>        : 把前一个命令输出作为后一个命令输入</div>
+            <p style="margin-top:8px">提示：真实项目里你会经常用它们分析日志。</p>
+          </div>
+
+          <!-- 3) 题目要求 -->
+          <div class="card">
+            <h4>题目要求（详细版）</h4>
+            <p class="muted">假设当前目录有一个日志文件 <b>app.log</b>。</p>
+            <div class="monoBox"><span class="warn">任务</span>：
+1) 找出包含 "ERROR" 的所有行
+2) 输出 ERROR 的总数（只要数字）
+3) 再输出：按「出现次数」从高到低的关键词统计（示意：ERROR / WARN / INFO）
+
+<span class="warn">输出示例</span>（格式不要求完全一致）：
+ERROR_COUNT=12
+ERROR 12
+WARN  7
+INFO  3</div>
+            <p style="margin-top:8px">你可以在中间只写「你认为最简洁的一条或几条命令」。</p>
+          </div>
+
+          <div class="card">
+            <h4>你要交付什么？</h4>
+            <p>中间代码框：填入你的 shell 命令（或脚本片段）。右侧：不懂就问 AI。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="v-handle" id="handleLeft" aria-label="resize left"></div>
+
+    <!-- 中：写答案（注释：题目简述 + 写的位置） -->
+    <main class="col" id="colMid">
+      <div class="midWrap">
+        <div class="editorArea" id="editorArea">
+          <div class="toolbar">
+            <div class="left">
+              <span class="statusDot"></span>
+              <span>answer.sh · 只写你的命令（示意）</span>
+              <span class="tag">bash</span>
+            </div>
+            <div class="right">
+              <div class="btn" id="btnRun">运行 <span class="kbd">⌘</span><span class="kbd">↵</span></div>
+              <div class="btn" id="btnHint">插入提示</div>
+            </div>
+          </div>
+
+          <textarea class="code" id="code" spellcheck="false"># =========================
+# 题目简述（简版）
+# - 输入：当前目录下的 app.log
+# - 要求：
+#   1) 统计 "ERROR" 出现的总行数（只输出数字或带前缀都可）
+#   2) 统计三种级别（ERROR/WARN/INFO）的行数，并按次数从大到小排序输出
+# - 允许：使用 grep / wc / awk / sort / uniq / sed 等
+#
+# 你需要写的内容在下面这一行（替换 TODO）
+# =========================
+
+# TODO: 在这里写你的命令（可以一行，也可以多行）</textarea>
+        </div>
+
+        <div class="h-handle" id="handleMid" aria-label="resize output"></div>
+
+        <div class="outArea" id="outArea">
+          <div class="toolbar" style="border-bottom:1px solid var(--stroke);">
+            <div class="left">
+              <span style="width:8px;height:8px;border-radius:999px;background:var(--warn);display:inline-block;box-shadow:0 0 14px rgba(245,158,11,.25)"></span>
+              <span>运行结果 / 终端输出</span>
+              <span class="tag">stdout</span>
+            </div>
+            <div class="right">
+              <div class="btn" id="btnClear">清空</div>
+            </div>
+          </div>
+
+          <div class="output" id="output">
+            <div class="outLine">[hint] 原型不执行真实 shell，仅展示「你写了什么」</div>
+            <div class="outOk">[ok] 你可以把这里换成真实后端执行结果</div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <div class="v-handle" id="handleRight" aria-label="resize right"></div>
+
+    <!-- 右：提问 -->
+    <aside class="col" id="colRight">
+      <div class="chatBox">
+        <div class="panelHeader">
+          <div class="panelTitle">向 AI 提问 <span class="tag">疑问区</span></div>
+          <div class="btn" id="btnNewChat" title="新对话（示意）">新对话</div>
+        </div>
+
+        <div class="chatStream" id="chatStream">
+          <div class="bubble ai">你可以问：<b>grep -c</b> 和 <b>wc -l</b> 有啥区别？怎么统计三种级别并排序？</div>
+          <div class="bubble me">我想一条命令完成统计+排序，怎么写？</div>
+          <div class="bubble ai">思路：先提取级别字段，再计数，再按数字倒序排序。可以用 <b>awk</b> + <b>sort</b>。</div>
+        </div>
+
+        <div class="composer">
+          <input id="chatInput" placeholder="输入问题，比如：awk 怎么写分组计数？" />
+          <button class="send" id="btnSend">发送</button>
+        </div>
+      </div>
+    </aside>
+
+    <div class="tooNarrow">
+      <div class="card" style="max-width:520px;margin:80px auto 0;">
+        <h4 style="margin:0 0 6px">窗口太窄啦</h4>
+        <p style="margin:0;color:var(--muted)">
+          这个原型是桌面三栏布局（左/中/右可拖动）。把窗口拉宽到 ≥ 980px 更好看。
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
+
+    // --------- 三栏拖动 ----------
+    const app = document.getElementById('app');
+    const left = document.getElementById('colLeft');
+    const mid = document.getElementById('colMid');
+    const right = document.getElementById('colRight');
+    const handleLeft = document.getElementById('handleLeft');
+    const handleRight = document.getElementById('handleRight');
+
+    const defaultLayout = () => {
+      const w = app.clientWidth;
+      const handle = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle')) || 10;
+      const usable = w - handle * 2;
+
+      const L = Math.round(usable * 0.30);
+      const M = Math.round(usable * 0.50);
+      const R = usable - L - M;
+
+      left.style.width = L + 'px';
+      mid.style.width = M + 'px';
+      right.style.width = R + 'px';
+
+      // 输出区默认 15%
+      const midH = mid.clientHeight;
+      const out = document.getElementById('outArea');
+      const editor = document.getElementById('editorArea');
+      const hHandle = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle')) || 10;
+      const usableH = midH - hHandle;
+      const outH = Math.round(usableH * 0.15);
+
+      out.style.height = outH + 'px';
+      editor.style.height = (usableH - outH) + 'px';
+    };
+
+    let dragging = null;
+    function startDrag(kind, e){
+      dragging = { kind };
+      document.body.classList.add('noselect');
+      e.preventDefault();
+    }
+    function endDrag(){
+      dragging = null;
+      document.body.classList.remove('noselect');
+    }
+
+    handleLeft.addEventListener('mousedown', (e)=>startDrag('left', e));
+    handleRight.addEventListener('mousedown', (e)=>startDrag('right', e));
+
+    window.addEventListener('mousemove', (e)=>{
+      if(!dragging) return;
+
+      const w = app.clientWidth;
+      const handle = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle')) || 10;
+      const usable = w - handle * 2;
+      const minCol = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--minCol')) || 240;
+
+      const L0 = left.getBoundingClientRect().width;
+      const R0 = right.getBoundingClientRect().width;
+
+      const rect = app.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+
+      if(dragging.kind === 'left'){
+        let newL = clamp(x, minCol, usable - minCol - minCol);
+        let remain = usable - newL;
+
+        let newR = clamp(R0, minCol, remain - minCol);
+        let newM = remain - newR;
+
+        if(newM < minCol){
+          newM = minCol;
+          newR = remain - newM;
+        }
+
+        left.style.width = Math.round(newL) + 'px';
+        mid.style.width = Math.round(newM) + 'px';
+        right.style.width = Math.round(newR) + 'px';
+      }
+
+      if(dragging.kind === 'right'){
+        let leftPlusMid = clamp(x - handle, minCol + minCol, usable - minCol);
+        let newR = usable - leftPlusMid;
+        newR = clamp(newR, minCol, usable - minCol - minCol);
+
+        let remain = usable - newR;
+
+        let newL = clamp(L0, minCol, remain - minCol);
+        let newM = remain - newL;
+
+        if(newM < minCol){
+          newM = minCol;
+          newL = remain - newM;
+        }
+
+        left.style.width = Math.round(newL) + 'px';
+        mid.style.width = Math.round(newM) + 'px';
+        right.style.width = Math.round(newR) + 'px';
+      }
+    });
+
+    window.addEventListener('mouseup', endDrag);
+    window.addEventListener('mouseleave', endDrag);
+
+    // --------- 中间上下拖动（编辑/输出） ----------
+    const editorArea = document.getElementById('editorArea');
+    const outArea = document.getElementById('outArea');
+    const handleMid = document.getElementById('handleMid');
+    handleMid.addEventListener('mousedown', (e)=>startDrag('midHeight', e));
+
+    window.addEventListener('mousemove', (e)=>{
+      if(!dragging || dragging.kind !== 'midHeight') return;
+
+      const minOut = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--minOut')) || 120;
+      const minEditor = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--minEditor')) || 180;
+      const hHandle = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--handle')) || 10;
+
+      const midRect = mid.getBoundingClientRect();
+      const y = e.clientY - midRect.top;
+
+      const total = midRect.height - hHandle;
+      let newEditorH = clamp(y, minEditor, total - minOut);
+      let newOutH = total - newEditorH;
+
+      editorArea.style.height = Math.round(newEditorH) + 'px';
+      outArea.style.height = Math.round(newOutH) + 'px';
+    });
+
+    // --------- 示例交互 ----------
+    const output = document.getElementById('output');
+    const code = document.getElementById('code');
+
+    document.getElementById('btnClear').addEventListener('click', ()=>{
+      output.innerHTML = '<div class="outLine">[hint] 输出已清空（原型示意）</div>';
+    });
+
+    document.getElementById('btnRun').addEventListener('click', ()=>{
+      const lines = code.value.split('\n');
+      // 找 TODO 后面的内容，模拟“提交的命令”
+      const todoIdx = lines.findIndex(l => l.includes('TODO:'));
+      const submitted = todoIdx >= 0 ? lines.slice(todoIdx).join('\n') : lines.slice(0, 12).join('\n');
+
+      output.innerHTML =
+        '<div class="outLine">[run] 运行中…（原型不执行真实 shell）</div>' +
+        '<div class="outOk">[ok] 你提交的内容：</div>' +
+        '<pre class="outLine" style="margin:8px 0 0;white-space:pre-wrap;border:1px solid rgba(255,255,255,.10);padding:10px;border-radius:12px;background:rgba(255,255,255,.02)"></pre>' +
+        '<div class="outWarn" style="margin-top:10px">[note] 实际项目：这里接后端执行 + 沙箱限制 + 超时等</div>';
+      output.querySelector('pre').textContent = submitted;
+    });
+
+    document.getElementById('btnHint').addEventListener('click', ()=>{
+      const hint =
+`# 提示（可删）
+# 统计 ERROR 行数（输出数字）：
+#   grep -c "ERROR" app.log
+#
+# 统计三种级别并排序（思路示意）：
+#   grep -E "ERROR|WARN|INFO" app.log | awk '{print $1}' | sort | uniq -c | sort -nr
+`;
+      const cur = code.value;
+      if(!cur.includes('# 提示（可删）')) code.value = cur + "\n\n" + hint;
+    });
+
+    // 右侧提问（示意）
+    const chatStream = document.getElementById('chatStream');
+    const chatInput = document.getElementById('chatInput');
+    const btnSend = document.getElementById('btnSend');
+
+    function addBubble(text, who){
+      const div = document.createElement('div');
+      div.className = 'bubble ' + who;
+      div.textContent = text;
+      chatStream.appendChild(div);
+      chatStream.scrollTop = chatStream.scrollHeight;
+    }
+
+    btnSend.addEventListener('click', ()=>{
+      const t = chatInput.value.trim();
+      if(!t) return;
+      addBubble(t, 'me');
+      chatInput.value = '';
+      setTimeout(()=>addBubble('收到：' + t + '（原型示意：这里接入你的 AI）', 'ai'), 220);
+    });
+    chatInput.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter'){ e.preventDefault(); btnSend.click(); }
+    });
+
+    document.getElementById('btnNewChat').addEventListener('click', ()=>{
+      chatStream.innerHTML = '';
+      addBubble('新对话已开始（示意）', 'ai');
+    });
+
+    // 重置 & 快捷键
+    document.getElementById('btnReset').addEventListener('click', defaultLayout);
+    window.addEventListener('keydown', (e)=>{
+      if(e.key.toLowerCase() === 'r') defaultLayout();
+      if((e.metaKey || e.ctrlKey) && e.key === 'Enter') document.getElementById('btnRun').click();
+    });
+
+    defaultLayout();
+  </script>
+</body>
+</html>
