@@ -881,7 +881,7 @@ const TeachingPage: React.FC = () => {
                     background: msg.role === 'user' ? (colors.isDark ? 'rgba(110,231,255,0.08)' : '#e6f4ff') : (colors.isDark ? 'rgba(255,255,255,0.03)' : '#fff'),
                     color: colors.text,
                   }}>
-                    <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>{msg.content}</ReactMarkdown></div>
+                    <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>
                   </div>
                 ))}
                 {isChatStreaming && chatMessages[chatMessages.length - 1]?.role !== 'assistant' && (
