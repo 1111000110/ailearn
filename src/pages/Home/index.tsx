@@ -5,6 +5,8 @@ import {
   SunOutlined,
   MoonOutlined,
   ArrowRightOutlined,
+  BookOutlined,
+  CodeOutlined,
 } from '@ant-design/icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { subjects } from '../../config/subjects';
@@ -17,10 +19,6 @@ const HomePage: React.FC = () => {
   const isDark = theme === 'dark';
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-
-  const handleSelect = (subjectId: string) => {
-    navigate(`/training/${subjectId}`);
-  };
 
   return (
     <div
@@ -116,10 +114,10 @@ const HomePage: React.FC = () => {
               marginTop: 12,
               fontSize: 16,
               color: isDark ? 'rgba(255,255,255,0.55)' : '#888',
-              maxWidth: 480,
+              maxWidth: 520,
             }}
           >
-            选择一个科目开始训练，像 LeetCode 一样刷题，遇到问题随时问 AI
+            选择一个科目，进入「教学」系统学习 或「训练」刷题实战，遇到问题随时问 AI
           </Paragraph>
         </div>
 
@@ -140,7 +138,6 @@ const HomePage: React.FC = () => {
                 key={subject.id}
                 onMouseEnter={() => setHoveredId(subject.id)}
                 onMouseLeave={() => setHoveredId(null)}
-                onClick={() => handleSelect(subject.id)}
                 style={{
                   padding: 20,
                   borderRadius: 14,
@@ -160,7 +157,6 @@ const HomePage: React.FC = () => {
                     : isHovered
                       ? '#fff'
                       : 'rgba(255,255,255,0.7)',
-                  cursor: 'pointer',
                   transition: 'all 0.2s ease',
                   transform: isHovered ? 'translateY(-2px)' : 'none',
                   boxShadow:
@@ -201,7 +197,7 @@ const HomePage: React.FC = () => {
                 </div>
                 <p
                   style={{
-                    margin: 0,
+                    margin: '0 0 14px 0',
                     fontSize: 13,
                     lineHeight: 1.6,
                     color: isDark ? 'rgba(255,255,255,0.55)' : '#888',
@@ -209,6 +205,65 @@ const HomePage: React.FC = () => {
                 >
                   {subject.desc}
                 </p>
+                {/* 两个模式按钮 */}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => navigate(`/teaching/${subject.id}`)}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '7px 0',
+                      borderRadius: 8,
+                      border: `1px solid ${isDark ? 'rgba(110,231,255,0.25)' : '#1677ff'}`,
+                      background: isDark ? 'rgba(110,231,255,0.08)' : 'rgba(22,119,255,0.06)',
+                      color: isDark ? '#6ee7ff' : '#1677ff',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = isDark ? 'rgba(110,231,255,0.16)' : 'rgba(22,119,255,0.12)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = isDark ? 'rgba(110,231,255,0.08)' : 'rgba(22,119,255,0.06)';
+                    }}
+                  >
+                    <BookOutlined style={{ fontSize: 13 }} />
+                    教学
+                  </button>
+                  <button
+                    onClick={() => navigate(`/training/${subject.id}`)}
+                    style={{
+                      flex: 1,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                      padding: '7px 0',
+                      borderRadius: 8,
+                      border: `1px solid ${isDark ? 'rgba(34,197,94,0.3)' : '#52c41a'}`,
+                      background: isDark ? 'rgba(34,197,94,0.08)' : 'rgba(82,196,26,0.06)',
+                      color: isDark ? '#4ade80' : '#52c41a',
+                      fontSize: 13,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.background = isDark ? 'rgba(34,197,94,0.16)' : 'rgba(82,196,26,0.12)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.background = isDark ? 'rgba(34,197,94,0.08)' : 'rgba(82,196,26,0.06)';
+                    }}
+                  >
+                    <CodeOutlined style={{ fontSize: 13 }} />
+                    训练
+                  </button>
+                </div>
               </div>
             );
           })}

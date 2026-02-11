@@ -20,6 +20,18 @@ export const AGENT_CONFIG = {
     api_key: '$2a$10$jiubMvYKzSrVLTZLY0zz2O1G5GGpHj1w./xO5E0k/HM8urCy0cGc2',
     name: 'AILearn-教学助手',
   },
+  // 课程大纲生成器 Agent
+  outlineGenerator: {
+    agent_id: 4,
+    api_key: '$2a$10$4SEO1K7C2ErznVYMkta3kONLeIKRcxoUTgnWNiKoKZq.6p/vdZk..',
+    name: 'AILearn-课程大纲生成器',
+  },
+  // 教学内容生成器 Agent
+  contentGenerator: {
+    agent_id: 5,
+    api_key: '$2a$10$TaNixAgsoyszIyOcUgIIEO2H2jiT56NS1A60yogZ9zgCKzjG0GOkm',
+    name: 'AILearn-教学内容生成器',
+  },
 } as const;
 
 // 科目到语言的映射

@@ -5,6 +5,7 @@ import zhCN from 'antd/locale/zh_CN';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import HomePage from './pages/Home';
 import TrainingPage from './pages/Training';
+import TeachingPage from './pages/Teaching';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +50,7 @@ const AppContent: React.FC = () => {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/training/:subjectId" element={<TrainingPage />} />
+          <Route path="/teaching/:subjectId" element={<TeachingPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
