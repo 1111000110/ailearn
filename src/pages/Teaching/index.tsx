@@ -542,10 +542,11 @@ const TeachingPage: React.FC = () => {
         if (parsed.type === 'content') {
           const d = JSON.parse(parsed.data);
           chatAssistantRef.current += d.content;
+          const snapshot = chatAssistantRef.current;
           setChatMessages(prev => {
             const last = prev[prev.length - 1];
-            if (last?.role === 'assistant') { const arr = [...prev]; arr[arr.length - 1] = { ...last, content: chatAssistantRef.current }; return arr; }
-            return [...prev, { role: 'assistant', content: chatAssistantRef.current }];
+            if (last?.role === 'assistant') { const arr = [...prev]; arr[arr.length - 1] = { ...last, content: snapshot }; return arr; }
+            return [...prev, { role: 'assistant', content: snapshot }];
           });
         } else if (parsed.type === 'message_end') { setIsChatStreaming(false); chatStreamRef.current = null; chatAssistantRef.current = ''; }
         else if (parsed.type === 'error') { const d = JSON.parse(parsed.data); setChatMessages(prev => [...prev, { role: 'assistant', content: `错误: ${d.message}` }]); setIsChatStreaming(false); }
@@ -579,10 +580,11 @@ const TeachingPage: React.FC = () => {
         if (parsed.type === 'content') {
           const d = JSON.parse(parsed.data);
           chatAssistantRef.current += d.content;
+          const snapshot = chatAssistantRef.current;
           setChatMessages(prev => {
             const last = prev[prev.length - 1];
-            if (last?.role === 'assistant') { const arr = [...prev]; arr[arr.length - 1] = { ...last, content: chatAssistantRef.current }; return arr; }
-            return [...prev, { role: 'assistant', content: chatAssistantRef.current }];
+            if (last?.role === 'assistant') { const arr = [...prev]; arr[arr.length - 1] = { ...last, content: snapshot }; return arr; }
+            return [...prev, { role: 'assistant', content: snapshot }];
           });
         } else if (parsed.type === 'message_end') { setIsChatStreaming(false); chatStreamRef.current = null; }
       } catch { /* ignore */ }
