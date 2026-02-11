@@ -63,7 +63,7 @@ const HomePage: React.FC = () => {
               letterSpacing: 0.2,
             }}
           >
-            AILearn
+            码上学
           </span>
           <span
             style={{
@@ -107,7 +107,7 @@ const HomePage: React.FC = () => {
               fontWeight: 800,
             }}
           >
-            AI 辅助学习平台
+            码上学
           </Title>
           <Paragraph
             style={{

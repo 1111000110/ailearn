@@ -190,7 +190,7 @@ function repairJSON(str: string): string {
   return result;
 }
 
-function tryParse(str: string): any | null {
+function tryParse(str: string): never | null {
   try { return JSON.parse(str); } catch { /* ignore */ }
   try { return JSON.parse(repairJSON(str)); } catch { /* ignore */ }
   return null;

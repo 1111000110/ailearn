@@ -23,6 +23,7 @@ import {
   CaretRightOutlined,
   MenuFoldOutlined,
   MenuUnfoldOutlined,
+  UndoOutlined,
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -180,10 +181,22 @@ const EditableCodeBlock: React.FC<{
   runnable: boolean;
   onRun: (code: string, lang: string) => void;
   colors: ReturnType<typeof useThemeColors>;
-}> = ({ initialCode, lang, isDark, runnable, onRun, colors }) => {
-  const [code, setCode] = useState(initialCode);
+  editsMap: React.MutableRefObject<Map<string, string>>;
+}> = ({ initialCode, lang, isDark, runnable, onRun, colors, editsMap }) => {
+  // 用 initialCode 做 key，从外部 map 恢复用户编辑（防止 ReactMarkdown 重建组件丢失编辑）
+  const [code, setCode] = useState(() => editsMap.current.get(initialCode) ?? initialCode);
+  const isEdited = code !== initialCode;
   const lineCount = code.split('\n').length;
   const height = Math.min(Math.max(lineCount * 20 + 20, 68), 420);
+
+  const handleChange = (val: string) => {
+    setCode(val);
+    editsMap.current.set(initialCode, val);
+  };
+  const handleReset = () => {
+    setCode(initialCode);
+    editsMap.current.delete(initialCode);
+  };
 
   return (
     <div style={{ marginBottom: 12 }}>
@@ -200,19 +213,31 @@ const EditableCodeBlock: React.FC<{
         textTransform: 'uppercase', letterSpacing: 0.5,
       }}>
         <span>{lang || 'code'}</span>
-        {runnable && (
-          <Tooltip title="让 AI 运行此代码">
-            <Button
-              type="primary"
-              size="small"
-              icon={<CaretRightOutlined />}
-              onClick={() => onRun(code, lang)}
-              style={{ opacity: 0.9, fontSize: 11, height: 22, borderRadius: 6 }}
-            >
-              运行
-            </Button>
-          </Tooltip>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {isEdited && (
+            <Tooltip title="重置为原始代码">
+              <Button
+                size="small"
+                icon={<UndoOutlined />}
+                onClick={handleReset}
+                style={{ fontSize: 11, height: 22, borderRadius: 6 }}
+              />
+            </Tooltip>
+          )}
+          {runnable && (
+            <Tooltip title="让 AI 运行此代码">
+              <Button
+                type="primary"
+                size="small"
+                icon={<CaretRightOutlined />}
+                onClick={() => onRun(code, lang)}
+                style={{ opacity: 0.9, fontSize: 11, height: 22, borderRadius: 6 }}
+              >
+                运行
+              </Button>
+            </Tooltip>
+          )}
+        </div>
       </div>
       <div style={{
         border: `1px solid ${colors.stroke}`,
@@ -222,7 +247,7 @@ const EditableCodeBlock: React.FC<{
       }}>
         <CodeEditor
           value={code}
-          onChange={setCode}
+          onChange={handleChange}
           language={lang || 'bash'}
           isDark={isDark}
         />
@@ -252,6 +277,7 @@ const TeachingPage: React.FC = () => {
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [contentProgress, setContentProgress] = useState('');
   const contentCacheRef = useRef<Map<string, string>>(new Map());
+  const codeEditsRef = useRef<Map<string, string>>(new Map());
 
   // ===== AI 对话 =====
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
@@ -781,6 +807,7 @@ const TeachingPage: React.FC = () => {
                           runnable={runnable}
                           onRun={handleRunCode}
                           colors={colors}
+                          editsMap={codeEditsRef}
                         />
                       );
                     },
