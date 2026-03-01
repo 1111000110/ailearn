@@ -12,7 +12,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Button, Typography, Tooltip, Input, Spin, Switch, Space, message,
+  Button, Typography, Tooltip, Input, Spin, Switch, Space,
 } from 'antd';
 import {
   ArrowLeftOutlined, SunOutlined, MoonOutlined, SendOutlined,
@@ -232,7 +232,6 @@ const TeachingPage: React.FC = () => {
 
   // ===== 目录数据（来自后端） =====
   const [rootTitle, setRootTitle] = useState('');      // 根目录标题（如"Go 语言"）
-  const [rootDesc, setRootDesc] = useState('');        // 根目录描述
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [isLoadingOutline, setIsLoadingOutline] = useState(true);
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
@@ -292,7 +291,6 @@ const TeachingPage: React.FC = () => {
         const tree = resp.catalogue_struct;
         if (tree?.catalogue) {
           setRootTitle(tree.catalogue.title);
-          setRootDesc(tree.catalogue.desc);
         }
         const mapped = mapCatalogueToChapters(tree);
         setChapters(mapped);
