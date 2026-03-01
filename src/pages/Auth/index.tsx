@@ -131,7 +131,7 @@ const AuthPage: React.FC = () => {
             }}
           />
           <span style={{ fontWeight: 700, fontSize: 16, color: c.text, letterSpacing: 0.2 }}>
-            码上学
+            码力学社
           </span>
         </div>
 

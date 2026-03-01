@@ -133,7 +133,7 @@ const SettingsPage: React.FC = () => {
             }}
           />
           <span style={{ fontWeight: 700, fontSize: 16, color: c.text, letterSpacing: 0.2 }}>
-            码上学
+            码力学社
           </span>
         </div>
         <Tooltip title={c.isDark ? '切换到亮色模式' : '切换到暗色模式'}>

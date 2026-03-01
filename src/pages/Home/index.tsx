@@ -289,7 +289,7 @@ const HomePage: React.FC = () => {
             }}
           />
           <span style={{ fontWeight: 700, fontSize: 16, color: isDark ? 'rgba(255,255,255,0.92)' : '#1a1a1a', letterSpacing: 0.2 }}>
-            码上学
+            码力学社
           </span>
           <span
             style={{
@@ -339,7 +339,7 @@ const HomePage: React.FC = () => {
         {/* Hero 标题区 */}
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
           <Title level={1} style={{ margin: 0, fontSize: 36, color: isDark ? 'rgba(255,255,255,0.92)' : '#1a1a1a', fontWeight: 800 }}>
-            码上学，码上会
+            码力学，码上会
           </Title>
           <Paragraph style={{ marginTop: 12, fontSize: 16, color: isDark ? 'rgba(255,255,255,0.55)' : '#888', maxWidth: 560 }}>
             AI 驱动的编程学习平台 —— 系统教学掌握知识体系，实战训练巩固编程能力
