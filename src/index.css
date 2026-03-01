@@ -189,6 +189,29 @@ body {
   background: rgba(255, 255, 255, 0.22);
 }
 
+/* ===== 浏览器自动填充 (autofill) 背景色修正 ===== */
+/* Chrome / Safari 在自动填充账号密码时，会通过 :-webkit-autofill 伪类
+   强制设置白色/浅蓝背景，普通 background 无法覆盖。
+   解决方式：用超大 inset box-shadow 盖住浏览器的底色。 */
+
+/* 亮色模式：保持白底 */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset !important;
+  -webkit-text-fill-color: #1a1a1a !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* 暗色模式：匹配 ConfigProvider 的 colorBgContainer (#0f1a2e) */
+[data-theme='dark'] input:-webkit-autofill,
+[data-theme='dark'] input:-webkit-autofill:hover,
+[data-theme='dark'] input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #0f1a2e inset !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.92) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 /* 禁止拖拽时文本选择 */
 .no-select, .no-select * {
   user-select: none !important;

@@ -1,40 +1,40 @@
+/**
+ * 教学页面 —— 三栏布局：目录 | 教学内容 | AI 助教
+ *
+ * 核心数据流变更（相对旧版）：
+ * - 课程大纲：从后端 /api/catalogue/detail 获取，不再每次 AI 生成
+ * - 教学内容：
+ *   · post_id > 0 → /api/post/detail 获取已有文章
+ *   · post_id === 0 → AI 流式生成 → /api/post/create 保存 → /api/catalogue/update 绑定
+ * - AI 对话：保持不变，仍走 Agent 流式接口
+ */
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Button,
-  Typography,
-  Tooltip,
-  Input,
-  Spin,
-  Switch,
-  Space,
+  Button, Typography, Tooltip, Input, Spin, Switch, Space, message,
 } from 'antd';
 import {
-  ArrowLeftOutlined,
-  SunOutlined,
-  MoonOutlined,
-  SendOutlined,
-  RobotOutlined,
-  ClearOutlined,
-  LoadingOutlined,
-  BookOutlined,
-  RightOutlined,
-  ReloadOutlined,
-  CaretRightOutlined,
-  MenuFoldOutlined,
-  MenuUnfoldOutlined,
-  UndoOutlined,
+  ArrowLeftOutlined, SunOutlined, MoonOutlined, SendOutlined,
+  RobotOutlined, ClearOutlined, LoadingOutlined, BookOutlined,
+  RightOutlined, CaretRightOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  UndoOutlined, LoginOutlined,
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 import rehypeRaw from 'rehype-raw';
+import rehypeKatex from 'rehype-katex';
 import { useTheme } from '../../contexts/ThemeContext';
-import { subjects } from '../../config/subjects';
+import { useAuth } from '../../contexts/AuthContext';
+import { getCatalogueDetail, updateCatalogue } from '../../api/catalogue';
+import { createPost, getPostDetail } from '../../api/post';
 import { runAgentStream } from '../../api/agent';
+import { AGENT_CONFIG } from '../../config/agents';
+import CodeEditor from '../../components/CodeEditor';
+import type { CatalogueStruct, CatalogueDetail } from '../../api/catalogue';
 import type { StreamClient } from '../../api/agent';
 import type { RunAgentStreamResp } from '../../types/agent';
-import { AGENT_CONFIG, SUBJECT_PROMPT_MAP, SUBJECT_LANGUAGE_MAP } from '../../config/agents';
-import CodeEditor from '../../components/CodeEditor';
 
 const { Text } = Typography;
 const { TextArea } = Input;
@@ -54,9 +54,7 @@ const useThemeColors = () => {
     muted: isDark ? 'rgba(255,255,255,0.55)' : '#888',
     accent: isDark ? '#6ee7ff' : '#1677ff',
     good: '#22c55e',
-    warn: '#f59e0b',
     codeBg: isDark ? 'rgba(0,0,0,0.25)' : '#f5f5f5',
-    subtleBg: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
     sidebarBg: isDark ? 'rgba(255,255,255,0.02)' : '#fafafa',
     hoverBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
     activeBg: isDark ? 'rgba(110,231,255,0.10)' : 'rgba(22,119,255,0.08)',
@@ -65,10 +63,27 @@ const useThemeColors = () => {
 };
 
 // ==================== 数据类型 ====================
-interface Section { id: string; title: string; desc?: string; }
-interface Chapter { id: string; title: string; sections: Section[]; }
 
-// ==================== 流式调用工具 ====================
+/** 章节（从 CatalogueStruct 第二层映射而来） */
+interface Chapter {
+  catalogueId: string;  // 对应后端 catalogue_id
+  title: string;
+  sections: Section[];
+}
+
+/** 小节（从 CatalogueStruct 第三层映射而来） */
+interface Section {
+  catalogueId: string;
+  title: string;
+  desc: string;
+  postId: string;  // 绑定的文章 ID，"0" 表示未绑定
+  /** 完整的后端目录信息，用于更新操作 */
+  catalogue: CatalogueDetail;
+}
+
+// ==================== 工具函数 ====================
+
+/** 流式调用 Agent */
 function callAgentStream(
   agentId: number, apiKey: string, content: string,
   onChunk: (text: string) => void,
@@ -106,46 +121,7 @@ function callAgentStream(
   return client;
 }
 
-// ==================== JSON 提取工具 ====================
-function repairJSON(str: string): string {
-  let result = '';
-  for (let i = 0; i < str.length; i++) {
-    if (str[i] === '\\' && i + 1 < str.length) {
-      const next = str[i + 1];
-      if ('"\\/bfnrtu'.includes(next)) { result += str[i]; } else { result += '\\\\'; }
-    } else { result += str[i]; }
-  }
-  return result;
-}
-function tryParse(str: string): any | null {
-  try { return JSON.parse(str); } catch { /* */ }
-  try { return JSON.parse(repairJSON(str)); } catch { /* */ }
-  return null;
-}
-function extractJSON(text: string): string | null {
-  const trimmed = text.trim();
-  if (trimmed.startsWith('{')) { const p = tryParse(trimmed); if (p) return JSON.stringify(p); }
-  const jsonBlockMatch = trimmed.match(/```json\s*\n([\s\S]*?)```/);
-  if (jsonBlockMatch) { const p = tryParse(jsonBlockMatch[1].trim()); if (p) return JSON.stringify(p); }
-  const startIdx = trimmed.indexOf('{');
-  if (startIdx !== -1) {
-    let depth = 0, inString = false, escape = false;
-    for (let i = startIdx; i < trimmed.length; i++) {
-      const ch = trimmed[i];
-      if (escape) { escape = false; continue; }
-      if (ch === '\\' && inString) { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{') depth++; else if (ch === '}') {
-        depth--;
-        if (depth === 0) { const p = tryParse(trimmed.slice(startIdx, i + 1)); if (p) return JSON.stringify(p); }
-      }
-    }
-  }
-  return null;
-}
-
-// ==================== 预处理 Markdown ====================
+/** 预处理 Markdown（修复 details/summary 标签前后缺少空行的问题） */
 function preprocessMarkdown(md: string): string {
   return md
     .replace(/([^\n])\n(<details)/g, '$1\n\n$2')
@@ -154,23 +130,44 @@ function preprocessMarkdown(md: string): string {
     .replace(/(<\/summary>)\n([^\n])/g, '$1\n\n$2');
 }
 
-
-// ==================== 判断代码块是否可执行 ====================
+/** 判断代码块是否可以运行（排除 shell/配置类代码） */
 function isRunnableCode(code: string, lang: string): boolean {
   const trimmed = code.trim();
   if (!trimmed) return false;
-  // shell/命令行类: 不可执行
   const shellLangs = ['bash', 'shell', 'sh', 'cmd', 'powershell', 'bat', 'zsh', ''];
   if (shellLangs.includes(lang.toLowerCase())) return false;
-  // 配置/标记语言: 不可执行
   const skipLangs = ['dockerfile', 'docker', 'nginx', 'html', 'css', 'yaml', 'yml', 'json', 'xml', 'toml', 'ini', 'conf', 'http', 'text', 'plaintext', 'txt', 'markdown', 'md'];
   if (skipLangs.includes(lang.toLowerCase())) return false;
-  // 编程语言：至少两行有效代码才可执行
   const codeLines = trimmed.split('\n').filter(l => {
     const t = l.trim();
     return t && !t.startsWith('//') && !t.startsWith('#') && !t.startsWith('--') && !t.startsWith('/*') && !t.startsWith('*');
   });
   return codeLines.length >= 2;
+}
+
+/**
+ * 将后端 CatalogueStruct 树映射为前端 Chapter[] 结构
+ * 树结构：根 → 章节(level 1) → 小节(level 2)
+ */
+function mapCatalogueToChapters(tree: CatalogueStruct): Chapter[] {
+  if (!tree.catalogue_struct) return [];
+  return tree.catalogue_struct.map(chapterNode => {
+    const chapterCat = chapterNode.catalogue;
+    return {
+      catalogueId: chapterCat?.catalogue_id || '0',
+      title: chapterCat?.title || '未命名章节',
+      sections: (chapterNode.catalogue_struct || []).map(sectionNode => {
+        const secCat = sectionNode.catalogue;
+        return {
+          catalogueId: secCat?.catalogue_id || '0',
+          title: secCat?.title || '未命名小节',
+          desc: secCat?.desc || '',
+          postId: secCat?.post_id || '0',
+          catalogue: secCat!,
+        };
+      }),
+    };
+  });
 }
 
 // ==================== 可编辑代码块组件 ====================
@@ -183,74 +180,42 @@ const EditableCodeBlock: React.FC<{
   colors: ReturnType<typeof useThemeColors>;
   editsMap: React.MutableRefObject<Map<string, string>>;
 }> = ({ initialCode, lang, isDark, runnable, onRun, colors, editsMap }) => {
-  // 用 initialCode 做 key，从外部 map 恢复用户编辑（防止 ReactMarkdown 重建组件丢失编辑）
   const [code, setCode] = useState(() => editsMap.current.get(initialCode) ?? initialCode);
   const isEdited = code !== initialCode;
   const lineCount = code.split('\n').length;
   const height = Math.min(Math.max(lineCount * 20 + 20, 68), 420);
 
-  const handleChange = (val: string) => {
-    setCode(val);
-    editsMap.current.set(initialCode, val);
-  };
-  const handleReset = () => {
-    setCode(initialCode);
-    editsMap.current.delete(initialCode);
-  };
+  const handleChange = (val: string) => { setCode(val); editsMap.current.set(initialCode, val); };
+  const handleReset = () => { setCode(initialCode); editsMap.current.delete(initialCode); };
 
   return (
     <div style={{ marginBottom: 12 }}>
-      {/* 语言标签 + 运行按钮 头部栏 */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '4px 12px',
-        fontSize: 11, fontWeight: 600,
+        padding: '4px 12px', fontSize: 11, fontWeight: 600,
         color: colors.isDark ? 'rgba(255,255,255,0.45)' : '#999',
         background: colors.isDark ? 'rgba(0,0,0,0.35)' : 'rgba(0,0,0,0.06)',
         borderRadius: '8px 8px 0 0',
-        border: `1px solid ${colors.stroke}`,
-        borderBottom: 'none',
+        border: `1px solid ${colors.stroke}`, borderBottom: 'none',
         textTransform: 'uppercase', letterSpacing: 0.5,
       }}>
         <span>{lang || 'code'}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           {isEdited && (
             <Tooltip title="重置为原始代码">
-              <Button
-                size="small"
-                icon={<UndoOutlined />}
-                onClick={handleReset}
-                style={{ fontSize: 11, height: 22, borderRadius: 6 }}
-              />
+              <Button size="small" icon={<UndoOutlined />} onClick={handleReset} style={{ fontSize: 11, height: 22, borderRadius: 6 }} />
             </Tooltip>
           )}
           {runnable && (
             <Tooltip title="让 AI 运行此代码">
-              <Button
-                type="primary"
-                size="small"
-                icon={<CaretRightOutlined />}
-                onClick={() => onRun(code, lang)}
-                style={{ opacity: 0.9, fontSize: 11, height: 22, borderRadius: 6 }}
-              >
-                运行
-              </Button>
+              <Button type="primary" size="small" icon={<CaretRightOutlined />} onClick={() => onRun(code, lang)}
+                style={{ opacity: 0.9, fontSize: 11, height: 22, borderRadius: 6 }}>运行</Button>
             </Tooltip>
           )}
         </div>
       </div>
-      <div style={{
-        border: `1px solid ${colors.stroke}`,
-        borderRadius: '0 0 8px 8px',
-        overflow: 'hidden',
-        height,
-      }}>
-        <CodeEditor
-          value={code}
-          onChange={handleChange}
-          language={lang || 'bash'}
-          isDark={isDark}
-        />
+      <div style={{ border: `1px solid ${colors.stroke}`, borderRadius: '0 0 8px 8px', overflow: 'hidden', height }}>
+        <CodeEditor value={code} onChange={handleChange} language={lang || 'bash'} isDark={isDark} />
       </div>
     </div>
   );
@@ -258,25 +223,26 @@ const EditableCodeBlock: React.FC<{
 
 // ==================== 教学页面主组件 ====================
 const TeachingPage: React.FC = () => {
-  const { subjectId } = useParams<{ subjectId: string }>();
+  const { catalogueId: catalogueIdStr } = useParams<{ catalogueId: string }>();
+  const catalogueId = catalogueIdStr || '';
   const navigate = useNavigate();
   const { toggleTheme } = useTheme();
+  const { user } = useAuth();
   const colors = useThemeColors();
-  const subject = subjects.find((s) => s.id === subjectId);
-  const subjectLang = SUBJECT_LANGUAGE_MAP[subjectId || ''] || 'bash';
 
-  // ===== 大纲状态 =====
+  // ===== 目录数据（来自后端） =====
+  const [rootTitle, setRootTitle] = useState('');      // 根目录标题（如"Go 语言"）
+  const [rootDesc, setRootDesc] = useState('');        // 根目录描述
   const [chapters, setChapters] = useState<Chapter[]>([]);
-  const [isLoadingOutline, setIsLoadingOutline] = useState(false);
-  const [outlineProgress, setOutlineProgress] = useState('');
+  const [isLoadingOutline, setIsLoadingOutline] = useState(true);
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
-  const [activeSection, setActiveSection] = useState<{ chapterId: string; sectionId: string } | null>(null);
+  const [activeSection, setActiveSection] = useState<{ chapterIdx: number; sectionIdx: number } | null>(null);
 
-  // ===== 教学内容状态 =====
+  // ===== 教学内容 =====
   const [sectionContent, setSectionContent] = useState('');
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [contentProgress, setContentProgress] = useState('');
-  const contentCacheRef = useRef<Map<string, string>>(new Map());
+  const contentCacheRef = useRef<Map<string, string>>(new Map()); // key = catalogueId
   const codeEditsRef = useRef<Map<string, string>>(new Map());
 
   // ===== AI 对话 =====
@@ -287,6 +253,10 @@ const TeachingPage: React.FC = () => {
   const chatStreamRef = useRef<StreamClient | null>(null);
   const chatAssistantRef = useRef('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+  /** 当前对话的持久会话 ID，清空对话时重新生成 */
+  const chatSessionIdRef = useRef(`ailearn_teach_chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  /** 标记本轮对话是否为首次发送（首次需要带上下文） */
+  const isFirstChatRef = useRef(true);
 
   // ===== 面板与布局 =====
   const containerRef = useRef<HTMLDivElement>(null);
@@ -299,49 +269,41 @@ const TeachingPage: React.FC = () => {
   const [isAiPanelVisible, setIsAiPanelVisible] = useState(true);
   const prevRightWidthRef = useRef(0.24);
   const draggingRef = useRef<string | null>(null);
-
-  // （已移除小节目录展开功能，改为绿色标识）
-
-  // ===== 流引用 =====
-  const outlineStreamRef = useRef<StreamClient | null>(null);
   const contentStreamRef = useRef<StreamClient | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const outlineScrollRef = useRef<HTMLDivElement>(null);
 
-  // heading ID 通过 useEffect + DOM 操作分配，不再使用 render 计数器
-
-  // ===== 聊天自动滚动 =====
+  // ===== 自动滚动 =====
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+  useEffect(() => {
+    if (isLoadingContent && contentRef.current) contentRef.current.scrollTop = contentRef.current.scrollHeight;
+  }, [contentProgress, isLoadingContent]);
 
   // ===== 清理 =====
   useEffect(() => {
-    return () => { chatStreamRef.current?.close(); outlineStreamRef.current?.close(); contentStreamRef.current?.close(); };
+    return () => { chatStreamRef.current?.close(); contentStreamRef.current?.close(); };
   }, []);
 
-  // ===== 自动加载大纲 =====
-  const hasAutoLoaded = useRef(false);
+  // ===== 加载目录树（核心变更：从后端获取，不再 AI 生成） =====
   useEffect(() => {
-    if (!hasAutoLoaded.current && subject) {
-      hasAutoLoaded.current = true;
-      setTimeout(() => handleLoadOutline(), 300);
-    }
-  }, [subject]);
+    if (!catalogueId) return;
+    setIsLoadingOutline(true);
+    getCatalogueDetail({ catalogue_id: catalogueId })
+      .then(resp => {
+        const tree = resp.catalogue_struct;
+        if (tree?.catalogue) {
+          setRootTitle(tree.catalogue.title);
+          setRootDesc(tree.catalogue.desc);
+        }
+        const mapped = mapCatalogueToChapters(tree);
+        setChapters(mapped);
+        // 默认展开第一章
+        if (mapped.length > 0) setExpandedChapters(new Set([mapped[0].catalogueId]));
+      })
+      .catch(() => { /* client 已处理 */ })
+      .finally(() => setIsLoadingOutline(false));
+  }, [catalogueId]);
 
-  // ===== 内容加载时自动滚到底 =====
-  useEffect(() => {
-    if (isLoadingContent && contentRef.current) {
-      contentRef.current.scrollTop = contentRef.current.scrollHeight;
-    }
-  }, [contentProgress, isLoadingContent]);
-
-  // ===== 大纲流式输出自动滚到底 =====
-  useEffect(() => {
-    if (isLoadingOutline && outlineScrollRef.current) {
-      outlineScrollRef.current.scrollTop = outlineScrollRef.current.scrollHeight;
-    }
-  }, [outlineProgress, isLoadingOutline]);
-
-  // ===== 面板拖拽逻辑（直接操作 DOM 避免频繁 re-render） =====
+  // ===== 面板拖拽（直接操作 DOM 提升性能） =====
   const handleMouseDown = useCallback((kind: string) => {
     draggingRef.current = kind;
     document.body.style.cursor = 'col-resize';
@@ -371,7 +333,6 @@ const TeachingPage: React.FC = () => {
             draggingRef.current = null;
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
-            // 同步 state
             setLeftWidth(leftWidthRef.current);
             setRightWidth(0);
             return;
@@ -383,10 +344,7 @@ const TeachingPage: React.FC = () => {
       });
     };
     const handleMouseUp = () => {
-      if (draggingRef.current) {
-        setLeftWidth(leftWidthRef.current);
-        setRightWidth(rightWidthRef.current);
-      }
+      if (draggingRef.current) { setLeftWidth(leftWidthRef.current); setRightWidth(rightWidthRef.current); }
       draggingRef.current = null;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
@@ -400,102 +358,118 @@ const TeachingPage: React.FC = () => {
   const toggleAiPanel = useCallback(() => {
     if (isAiPanelVisible) {
       prevRightWidthRef.current = rightWidth > 0.12 ? rightWidth : 0.24;
-      rightWidthRef.current = 0;
-      setRightWidth(0);
-      setIsAiPanelVisible(false);
+      rightWidthRef.current = 0; setRightWidth(0); setIsAiPanelVisible(false);
     } else {
       const w = prevRightWidthRef.current || 0.24;
-      rightWidthRef.current = w;
-      setRightWidth(w);
-      setIsAiPanelVisible(true);
+      rightWidthRef.current = w; setRightWidth(w); setIsAiPanelVisible(true);
     }
   }, [isAiPanelVisible, rightWidth]);
 
-  // ===== 加载课程大纲（含流式输出） =====
-  const handleLoadOutline = () => {
-    if (isLoadingOutline) return;
-    setIsLoadingOutline(true);
-    setChapters([]);
-    setOutlineProgress('');
+  // ===== 加载小节内容（核心逻辑） =====
+  const handleLoadSection = (chapterIdx: number, sectionIdx: number) => {
+    const chapter = chapters[chapterIdx];
+    const section = chapter.sections[sectionIdx];
 
-    const prompt = `请为「${subject?.name}」生成教学大纲。科目描述：${SUBJECT_PROMPT_MAP[subjectId || ''] || subject?.name}`;
-    const { agent_id, api_key } = AGENT_CONFIG.outlineGenerator;
-    outlineStreamRef.current?.close();
-    outlineStreamRef.current = callAgentStream(
-      agent_id, api_key, prompt,
-      (text) => setOutlineProgress(text),
-      (fullText) => {
-        setIsLoadingOutline(false);
-        setOutlineProgress('');
-        outlineStreamRef.current = null;
-        try {
-          const jsonStr = extractJSON(fullText);
-          if (!jsonStr) throw new Error('未找到 JSON');
-          const data = JSON.parse(jsonStr);
-          if (data.chapters && Array.isArray(data.chapters)) {
-            setChapters(data.chapters);
-            if (data.chapters.length > 0) setExpandedChapters(new Set([data.chapters[0].id]));
-          }
-        } catch (err) { console.error('Parse outline error:', err); }
-      },
-      (err) => {
-        setIsLoadingOutline(false);
-        setOutlineProgress('');
-        outlineStreamRef.current = null;
-        console.error('Outline error:', err);
-      },
-    );
-  };
+    // 相同小节点击忽略
+    if (activeSection?.chapterIdx === chapterIdx && activeSection?.sectionIdx === sectionIdx && !isLoadingContent) return;
 
-  // ===== 加载章节内容（带缓存） =====
-  const handleLoadSection = (chapter: Chapter, section: Section) => {
-    const isAlreadyActive = activeSection?.chapterId === chapter.id && activeSection?.sectionId === section.id;
-
-    // 点击已激活的小节 → 不做任何操作
-    if (isAlreadyActive && !isLoadingContent) {
-      return;
-    }
-
-    // 正在加载中切换到其他小节 → 取消当前流并切换
+    // 取消正在进行的流
     if (isLoadingContent) {
       contentStreamRef.current?.close();
       contentStreamRef.current = null;
       setIsLoadingContent(false);
     }
 
-    setActiveSection({ chapterId: chapter.id, sectionId: section.id });
+    setActiveSection({ chapterIdx, sectionIdx });
 
-    // 检查缓存
-    const cacheKey = `${chapter.id}::${section.id}`;
-    const cached = contentCacheRef.current.get(cacheKey);
+    // 1. 检查本地缓存
+    const cached = contentCacheRef.current.get(section.catalogueId);
     if (cached) {
       setSectionContent(cached);
       setContentProgress('');
-      setIsLoadingContent(false);
-      // 滚到顶部
       if (contentRef.current) contentRef.current.scrollTop = 0;
       return;
     }
 
+    // 2. post_id 有效 → 从后端获取已有文章
+    if (section.postId && section.postId !== '0') {
+      setIsLoadingContent(true);
+      setSectionContent('');
+      setContentProgress('');
+      getPostDetail({ post_id: section.postId })
+        .then(resp => {
+          const content = resp.post?.post_base?.content || '文章内容为空';
+          setSectionContent(content);
+          contentCacheRef.current.set(section.catalogueId, content);
+          if (contentRef.current) contentRef.current.scrollTop = 0;
+        })
+        .catch(() => { setSectionContent('加载文章失败'); })
+        .finally(() => setIsLoadingContent(false));
+      return;
+    }
+
+    // 3. post_id === "0" 且未登录 → 提示登录
+    if (!user) {
+      setSectionContent('');
+      setContentProgress('');
+      return;
+    }
+
+    // 4. post_id === "0" 且已登录 → AI 生成 → 创建文章 → 绑定目录
     setIsLoadingContent(true);
     setSectionContent('');
     setContentProgress('');
 
-    const prompt = `请为「${subject?.name}」课程中的「${chapter.title} - ${section.title}」生成详细的教学内容。${section.desc ? `内容描述：${section.desc}` : ''}`;
+    const prompt = `请为「${rootTitle}」课程中的「${chapter.title} - ${section.title}」生成详细的教学内容。${section.desc ? `补充描述为：${section.desc}` : ''}`;
+
     const { agent_id, api_key } = AGENT_CONFIG.contentGenerator;
     contentStreamRef.current?.close();
     contentStreamRef.current = callAgentStream(
       agent_id, api_key, prompt,
       (text) => setContentProgress(text),
-      (fullText) => {
-        setIsLoadingContent(false);
+      async (fullText) => {
         contentStreamRef.current = null;
         setSectionContent(fullText);
         setContentProgress('');
-        // 存入缓存
-        contentCacheRef.current.set(cacheKey, fullText);
-        // 滚到顶部
+        contentCacheRef.current.set(section.catalogueId, fullText);
         if (contentRef.current) contentRef.current.scrollTop = 0;
+
+        // AI 生成完毕 → 保存为帖子并绑定到目录
+        try {
+          // 创建帖子
+          const postResp = await createPost({
+            title: `${chapter.title} - ${section.title}`,
+            content: fullText,
+            images: [],
+            theme: rootTitle,
+            tags: [],
+            status: 1,
+          });
+          const newPostId = postResp.post_id;
+
+          // 更新目录绑定 post_id
+          await updateCatalogue({
+            catalogue_detail: { ...section.catalogue, post_id: newPostId },
+            catalogue_id: section.catalogueId,
+            update_field: ['post_id'],
+          });
+
+          // 更新本地 chapters 状态，避免重复生成
+          setChapters(prev => {
+            const next = [...prev];
+            const ch = { ...next[chapterIdx] };
+            const secs = [...ch.sections];
+            secs[sectionIdx] = { ...secs[sectionIdx], postId: newPostId };
+            ch.sections = secs;
+            next[chapterIdx] = ch;
+            return next;
+          });
+        } catch (err) {
+          console.error('保存文章失败:', err);
+          // 不影响内容展示，用户可以正常阅读 AI 生成的内容
+        }
+
+        setIsLoadingContent(false);
       },
       (err) => {
         setIsLoadingContent(false);
@@ -506,10 +480,10 @@ const TeachingPage: React.FC = () => {
   };
 
   // ===== 切换章节展开 =====
-  const toggleChapter = (chapterId: string) => {
+  const toggleChapter = (id: string) => {
     setExpandedChapters(prev => {
       const next = new Set(prev);
-      if (next.has(chapterId)) next.delete(chapterId); else next.add(chapterId);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
@@ -518,18 +492,26 @@ const TeachingPage: React.FC = () => {
   const handleChatSend = () => {
     if (!chatInput.trim() || isChatStreaming) return;
     const { agent_id, api_key } = AGENT_CONFIG.teachingAssistant;
+
+    // 仅在本轮首次发送且开启上下文时，携带教学内容
     let userContent = chatInput;
-    if (includeContext && sectionContent) {
-      const activeSec = activeSection
-        ? chapters.find(c => c.id === activeSection.chapterId)?.sections.find(s => s.id === activeSection.sectionId)
-        : null;
-      userContent = `[当前学习科目: ${subject?.name}]\n[当前章节: ${activeSec?.title || ''}]\n[教学内容摘要]:\n${sectionContent.slice(0, 3000)}\n\n[我的问题]: ${chatInput}`;
+    if (isFirstChatRef.current && includeContext && sectionContent && activeSection) {
+      const sec = chapters[activeSection.chapterIdx]?.sections[activeSection.sectionIdx];
+      userContent = `[当前学习科目: ${rootTitle}]
+[当前章节: ${sec?.title || ''}]
+[教学内容摘要]:
+${sectionContent.slice(0, 3000)}
+
+[我的问题]: ${chatInput}`;
     }
+    isFirstChatRef.current = false;
+
     setChatMessages(prev => [...prev, { role: 'user', content: chatInput }]);
     setChatInput('');
     setIsChatStreaming(true);
     chatAssistantRef.current = '';
-    const sessionId = `ailearn_teach_chat_${subjectId}_${Date.now()}`;
+
+    const sessionId = chatSessionIdRef.current;
     chatStreamRef.current?.close();
     const client = runAgentStream({
       agent_id, api_key,
@@ -549,7 +531,11 @@ const TeachingPage: React.FC = () => {
             return [...prev, { role: 'assistant', content: snapshot }];
           });
         } else if (parsed.type === 'message_end') { setIsChatStreaming(false); chatStreamRef.current = null; chatAssistantRef.current = ''; }
-        else if (parsed.type === 'error') { const d = JSON.parse(parsed.data); setChatMessages(prev => [...prev, { role: 'assistant', content: `错误: ${d.message}` }]); setIsChatStreaming(false); }
+        else if (parsed.type === 'error') {
+          const d = JSON.parse(parsed.data);
+          setChatMessages(prev => [...prev, { role: 'assistant', content: `错误: ${d.message}` }]);
+          setIsChatStreaming(false);
+        }
       } catch (err) { console.error('Chat stream error:', err); }
     });
     client.addEventListener('error', () => { setIsChatStreaming(false); chatStreamRef.current = null; });
@@ -557,17 +543,13 @@ const TeachingPage: React.FC = () => {
 
   // ===== 运行代码 =====
   const handleRunCode = (codeStr: string, lang: string) => {
-    // 展开 AI 面板
-    if (!isAiPanelVisible) {
-      setRightWidth(prevRightWidthRef.current || 0.24);
-      setIsAiPanelVisible(true);
-    }
-    const prompt = `请执行以下 ${lang} 代码并返回运行结果（只需要输出运行结果，不需要解释）：\n\n\`\`\`${lang}\n${codeStr}\n\`\`\``;
+    if (!isAiPanelVisible) { setRightWidth(prevRightWidthRef.current || 0.24); setIsAiPanelVisible(true); }
+    const prompt = `请执行以下 ${lang} 代码并返回运行结果：\n\n\`\`\`${lang}\n${codeStr}\n\`\`\``;
     const { agent_id, api_key } = AGENT_CONFIG.teachingAssistant;
     setChatMessages(prev => [...prev, { role: 'user', content: `▶ 运行代码:\n\`\`\`${lang}\n${codeStr}\n\`\`\`` }]);
     setIsChatStreaming(true);
     chatAssistantRef.current = '';
-    const sessionId = `ailearn_run_${Date.now()}`;
+    const sessionId = chatSessionIdRef.current;
     chatStreamRef.current?.close();
     const client = runAgentStream({
       agent_id, api_key,
@@ -592,7 +574,7 @@ const TeachingPage: React.FC = () => {
     client.addEventListener('error', () => { setIsChatStreaming(false); chatStreamRef.current = null; });
   };
 
-  // ===== heading 渲染器（ID 由 useEffect 在 DOM 层统一分配，避免 StrictMode 双渲染导致编号错乱） =====
+  // ===== heading 渲染器 =====
   const createHeadingRenderer = (level: number) => {
     return ({ children, ...props }: any) => {
       if (level === 1) return <h1 {...props}>{children}</h1>;
@@ -601,17 +583,22 @@ const TeachingPage: React.FC = () => {
     };
   };
 
-  if (!subject) {
+  // ===== 404 =====
+  if (!catalogueId) {
     return (
       <div style={{ padding: 40, textAlign: 'center' }}>
-        <Text>科目不存在</Text><br />
+        <Text>无效的模块 ID</Text><br />
         <Button type="link" onClick={() => navigate('/')}>返回首页</Button>
       </div>
     );
   }
 
-  // midWidth 不再用于中间面板（改为 flex:1 自适应），仅保留兼容引用
-  // const midWidth = 1 - leftWidth - (isAiPanelVisible ? rightWidth : 0);
+  // ===== 获取当前选中小节信息 =====
+  const currentSection = activeSection
+    ? chapters[activeSection.chapterIdx]?.sections[activeSection.sectionIdx]
+    : null;
+  // 未登录且 postId==="0" 时显示的占位
+  const needLogin = currentSection && (!currentSection.postId || currentSection.postId === '0') && !user;
 
   // ============================= JSX =============================
   return (
@@ -626,16 +613,12 @@ const TeachingPage: React.FC = () => {
           <Button type="text" size="small" icon={<ArrowLeftOutlined />} onClick={() => navigate('/')} style={{ color: colors.muted }} />
         </Tooltip>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 18 }}>{subject.icon}</span>
-          <span style={{ fontWeight: 700, color: colors.text, fontSize: 14 }}>{subject.name} 教学</span>
+          <BookOutlined style={{ fontSize: 14, color: colors.accent }} />
+          <span style={{ fontWeight: 700, color: colors.text, fontSize: 14 }}>
+            {rootTitle || '加载中...'} 教学
+          </span>
         </div>
-        <div style={{ width: 1, height: 20, background: colors.stroke, margin: '0 4px' }} />
-        <BookOutlined style={{ color: colors.accent, fontSize: 14 }} />
-        <span style={{ fontSize: 12, color: colors.muted }}>教学模式</span>
         <div style={{ flex: 1 }} />
-        <Tooltip title="重新生成大纲">
-          <Button type="text" size="small" icon={<ReloadOutlined />} onClick={handleLoadOutline} loading={isLoadingOutline} style={{ color: colors.muted }} />
-        </Tooltip>
         <Tooltip title={isAiPanelVisible ? '收起 AI 助教' : '展开 AI 助教'}>
           <Button type="text" size="small"
             icon={isAiPanelVisible ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
@@ -650,7 +633,7 @@ const TeachingPage: React.FC = () => {
       {/* ===== 三栏主体 ===== */}
       <div ref={containerRef} style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
 
-        {/* ---- 左侧：课程目录 ---- */}
+        {/* ---- 左侧：课程目录（从后端数据渲染） ---- */}
         <section ref={leftPanelRef} style={{
           width: `${leftWidth * 100}%`, flexShrink: 0, height: '100%', overflow: 'hidden',
           borderRight: `1px solid ${colors.stroke}`, display: 'flex', flexDirection: 'column',
@@ -664,39 +647,25 @@ const TeachingPage: React.FC = () => {
             <span style={{ fontWeight: 650, fontSize: 13, color: colors.text }}>课程目录</span>
             <span style={{ fontSize: 11, color: colors.muted }}>{chapters.length > 0 ? `${chapters.length} 章` : ''}</span>
           </div>
-          <div ref={outlineScrollRef} style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+          <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
             {isLoadingOutline ? (
-              <div style={{ padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                  <Spin size="small" />
-                  <span style={{ fontSize: 12, color: colors.muted }}>正在生成课程大纲...</span>
-                </div>
-                {outlineProgress && (
-                  <div style={{
-                    fontSize: 11, color: colors.muted, fontFamily: 'monospace',
-                    whiteSpace: 'pre-wrap', wordBreak: 'break-all', lineHeight: 1.5,
-                    maxHeight: 400, overflow: 'auto',
-                    padding: 10, borderRadius: 6,
-                    background: colors.isDark ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.03)',
-                    border: `1px solid ${colors.stroke}`,
-                  }}>
-                    {outlineProgress}
-                  </div>
-                )}
+              <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Spin size="small" />
+                <span style={{ fontSize: 12, color: colors.muted }}>加载目录...</span>
               </div>
             ) : chapters.length === 0 ? (
               <div style={{ textAlign: 'center', padding: 40, color: colors.muted }}>
                 <BookOutlined style={{ fontSize: 32, opacity: 0.3, marginBottom: 12 }} />
-                <div style={{ fontSize: 13 }}>暂无大纲</div>
-                <Button type="link" size="small" onClick={handleLoadOutline}>生成大纲</Button>
+                <div style={{ fontSize: 13 }}>暂无目录</div>
               </div>
             ) : (
               chapters.map((chapter, ci) => {
-                const isExpanded = expandedChapters.has(chapter.id);
+                const isExpanded = expandedChapters.has(chapter.catalogueId);
                 return (
-                  <div key={chapter.id}>
+                  <div key={chapter.catalogueId}>
+                    {/* 章节标题 */}
                     <div
-                      onClick={() => toggleChapter(chapter.id)}
+                      onClick={() => toggleChapter(chapter.catalogueId)}
                       style={{
                         padding: '8px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                         transition: 'background 0.15s', background: 'transparent', borderLeft: '3px solid transparent',
@@ -709,14 +678,14 @@ const TeachingPage: React.FC = () => {
                       <span style={{ fontSize: 13, fontWeight: 600, color: colors.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chapter.title}</span>
                       <span style={{ fontSize: 11, color: colors.muted }}>{chapter.sections.length}</span>
                     </div>
+                    {/* 小节列表 */}
                     {isExpanded && chapter.sections.map((section, si) => {
-                      const isActive = activeSection?.chapterId === chapter.id && activeSection?.sectionId === section.id;
-                      const cacheKey = `${chapter.id}::${section.id}`;
-                      const hasCached = contentCacheRef.current.has(cacheKey);
+                      const isActive = activeSection?.chapterIdx === ci && activeSection?.sectionIdx === si;
+                      const hasContent = (section.postId && section.postId !== '0') || contentCacheRef.current.has(section.catalogueId);
                       return (
-                        <div key={section.id}>
+                        <div key={section.catalogueId}>
                           <div
-                            onClick={() => handleLoadSection(chapter, section)}
+                            onClick={() => handleLoadSection(ci, si)}
                             style={{
                               padding: '6px 14px 6px 38px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
                               transition: 'background 0.15s',
@@ -729,8 +698,9 @@ const TeachingPage: React.FC = () => {
                             <span style={{ fontSize: 11, color: colors.muted, minWidth: 24 }}>{ci + 1}.{si + 1}</span>
                             <span style={{ fontSize: 12.5, color: isActive ? colors.activeText : colors.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isActive ? 600 : 400 }}>{section.title}</span>
                             {isActive && isLoadingContent && <LoadingOutlined style={{ fontSize: 11, color: colors.accent }} />}
-                            {hasCached && !isActive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#52c41a', flexShrink: 0 }} />}
-                            {hasCached && isActive && !isLoadingContent && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#52c41a', flexShrink: 0 }} />}
+                            {/* 绿色圆点表示已有内容 */}
+                            {hasContent && !isActive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.good, flexShrink: 0 }} />}
+                            {hasContent && isActive && !isLoadingContent && <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.good, flexShrink: 0 }} />}
                           </div>
                         </div>
                       );
@@ -748,26 +718,22 @@ const TeachingPage: React.FC = () => {
         </div>
 
         {/* ---- 中间：教学内容 ---- */}
-        <section style={{
-          flex: 1, minWidth: 0, height: '100%', overflow: 'hidden',
-          display: 'flex', flexDirection: 'column', background: colors.panel,
-        }}>
+        <section style={{ flex: 1, minWidth: 0, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: colors.panel }}>
           <div ref={contentRef} style={{ flex: 1, overflow: 'auto', padding: '24px 32px 60px' }}>
+            {/* 加载中（AI 流式生成） */}
             {isLoadingContent ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                   <Spin size="small" />
-                  <Text type="secondary" style={{ fontSize: 13 }}>正在生成教学内容...</Text>
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    {currentSection && currentSection.postId && currentSection.postId !== '0' ? '加载文章...' : '正在生成教学内容...'}
+                  </Text>
                 </div>
                 {contentProgress && (
                   <div className="markdown-body" style={{ fontSize: 14, lineHeight: 1.8 }}>
-                    <ReactMarkdown
-                      remarkPlugins={[remarkGfm]}
-                      rehypePlugins={[rehypeRaw]}
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]}
                       components={{
-                        h1: createHeadingRenderer(1),
-                        h2: createHeadingRenderer(2),
-                        h3: createHeadingRenderer(3),
+                        h1: createHeadingRenderer(1), h2: createHeadingRenderer(2), h3: createHeadingRenderer(3),
                         code({ className, children, ...props }: any) {
                           const match = /language-(\w+)/.exec(className || '');
                           if (!match) return <code className={className} {...props}>{children}</code>;
@@ -786,31 +752,29 @@ const TeachingPage: React.FC = () => {
                   </div>
                 )}
               </div>
+            ) : needLogin ? (
+              /* 未登录提示 */
+              <div style={{ textAlign: 'center', padding: '80px 20px', color: colors.muted }}>
+                <LoginOutlined style={{ fontSize: 48, marginBottom: 20, opacity: 0.2 }} />
+                <div style={{ fontSize: 16, marginBottom: 8 }}>该小节尚无内容</div>
+                <div style={{ fontSize: 13, marginBottom: 16, opacity: 0.7 }}>登录后可由 AI 自动生成教学内容并保存</div>
+                <Button type="primary" onClick={() => navigate('/auth')}>去登录</Button>
+              </div>
             ) : sectionContent ? (
+              /* 正常渲染文章 */
               <div className="markdown-body" style={{ fontSize: 14, lineHeight: 1.8 }}>
-                <ReactMarkdown
-                  remarkPlugins={[remarkGfm]}
-                  rehypePlugins={[rehypeRaw]}
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]}
                   components={{
-                    h1: createHeadingRenderer(1),
-                    h2: createHeadingRenderer(2),
-                    h3: createHeadingRenderer(3),
+                    h1: createHeadingRenderer(1), h2: createHeadingRenderer(2), h3: createHeadingRenderer(3),
                     code({ className, children, ...props }: any) {
                       const match = /language-(\w+)/.exec(className || '');
                       if (!match) return <code className={className} {...props}>{children}</code>;
                       const codeStr = String(children).replace(/\n$/, '');
-                      const lang = match[1] || subjectLang;
+                      const lang = match[1];
                       const runnable = isRunnableCode(codeStr, lang);
                       return (
-                        <EditableCodeBlock
-                          initialCode={codeStr}
-                          lang={lang}
-                          isDark={colors.isDark}
-                          runnable={runnable}
-                          onRun={handleRunCode}
-                          colors={colors}
-                          editsMap={codeEditsRef}
-                        />
+                        <EditableCodeBlock initialCode={codeStr} lang={lang} isDark={colors.isDark}
+                          runnable={runnable} onRun={handleRunCode} colors={colors} editsMap={codeEditsRef} />
                       );
                     },
                   }}
@@ -819,18 +783,19 @@ const TeachingPage: React.FC = () => {
                 </ReactMarkdown>
               </div>
             ) : (
+              /* 空状态 */
               <div style={{ textAlign: 'center', padding: '80px 20px', color: colors.muted }}>
                 <BookOutlined style={{ fontSize: 48, marginBottom: 20, opacity: 0.2 }} />
                 <div style={{ fontSize: 16, marginBottom: 8 }}>选择左侧目录开始学习</div>
                 <div style={{ fontSize: 13, opacity: 0.7 }}>
-                  {chapters.length > 0 ? '点击左侧章节中的小节，AI 会实时生成专业教学内容' : '请等待课程大纲加载完成'}
+                  {chapters.length > 0 ? '点击左侧章节中的小节，查看或生成教学内容' : '正在加载课程目录...'}
                 </div>
               </div>
             )}
           </div>
         </section>
 
-        {/* 右拖拽条（仅 AI 面板可见时显示） */}
+        {/* 右拖拽条 */}
         {isAiPanelVisible && (
           <div onMouseDown={() => handleMouseDown('right')} style={{ width: 6, cursor: 'col-resize', position: 'relative', zIndex: 5, flexShrink: 0 }}>
             <div style={{ position: 'absolute', top: '50%', left: '50%', width: 2, height: 36, transform: 'translate(-50%,-50%)', borderRadius: 999, background: colors.isDark ? 'rgba(255,255,255,0.15)' : '#d9d9d9' }} />
@@ -854,11 +819,15 @@ const TeachingPage: React.FC = () => {
                   <span style={{ fontWeight: 650, fontSize: 13, color: colors.text }}>AI 助教</span>
                 </div>
                 <Space size={4}>
-                  <Tooltip title={includeContext ? '携带当前教学内容作为上下文' : '不携带上下文'}>
+                  <Tooltip title={includeContext ? '携带当前教学内容作为上下文，切换时需要清空对话生效' : '不携带上下文，切换时需要清空对话生效'}>
                     <Switch size="small" checked={includeContext} onChange={setIncludeContext} checkedChildren="上下文" unCheckedChildren="无上下文" />
                   </Tooltip>
                   <Tooltip title="清空对话">
-                    <Button type="text" size="small" icon={<ClearOutlined />} onClick={() => setChatMessages([])} style={{ color: colors.muted }} />
+                    <Button type="text" size="small" icon={<ClearOutlined />} onClick={() => {
+                      setChatMessages([]);
+                      chatSessionIdRef.current = `ailearn_teach_chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                      isFirstChatRef.current = true;
+                    }} style={{ color: colors.muted }} />
                   </Tooltip>
                   <Tooltip title="收起面板">
                     <Button type="text" size="small" icon={<MenuFoldOutlined />} onClick={toggleAiPanel} style={{ color: colors.muted }} />
@@ -876,14 +845,13 @@ const TeachingPage: React.FC = () => {
                 )}
                 {chatMessages.map((msg, i) => (
                   <div key={i} style={{
-                    maxWidth: '92%',
-                    alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                    maxWidth: '92%', alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
                     padding: '8px 12px', borderRadius: 12, fontSize: 13, lineHeight: 1.6,
                     border: `1px solid ${msg.role === 'user' ? (colors.isDark ? 'rgba(110,231,255,0.22)' : '#1677ff') : colors.stroke}`,
                     background: msg.role === 'user' ? (colors.isDark ? 'rgba(110,231,255,0.08)' : '#e6f4ff') : (colors.isDark ? 'rgba(255,255,255,0.03)' : '#fff'),
                     color: colors.text,
                   }}>
-                    <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown></div>
+                    <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{msg.content}</ReactMarkdown></div>
                   </div>
                 ))}
                 {isChatStreaming && chatMessages[chatMessages.length - 1]?.role !== 'assistant' && (
@@ -916,18 +884,14 @@ const TeachingPage: React.FC = () => {
 
         {/* AI 面板收起时的展开按钮 */}
         {!isAiPanelVisible && (
-          <div
-            onClick={toggleAiPanel}
-            style={{
-              position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
-              width: 28, height: 72, borderRadius: '8px 0 0 8px', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: colors.isDark ? 'rgba(110,231,255,0.12)' : 'rgba(22,119,255,0.08)',
-              border: `1px solid ${colors.isDark ? 'rgba(110,231,255,0.25)' : 'rgba(22,119,255,0.2)'}`,
-              borderRight: 'none',
-              transition: 'all 0.2s',
-              zIndex: 10,
-            }}
+          <div onClick={toggleAiPanel} style={{
+            position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
+            width: 28, height: 72, borderRadius: '8px 0 0 8px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            background: colors.isDark ? 'rgba(110,231,255,0.12)' : 'rgba(22,119,255,0.08)',
+            border: `1px solid ${colors.isDark ? 'rgba(110,231,255,0.25)' : 'rgba(22,119,255,0.2)'}`,
+            borderRight: 'none', transition: 'all 0.2s', zIndex: 10,
+          }}
             onMouseEnter={e => { e.currentTarget.style.background = colors.isDark ? 'rgba(110,231,255,0.22)' : 'rgba(22,119,255,0.15)'; }}
             onMouseLeave={e => { e.currentTarget.style.background = colors.isDark ? 'rgba(110,231,255,0.12)' : 'rgba(22,119,255,0.08)'; }}
           >
