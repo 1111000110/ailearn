@@ -423,6 +423,7 @@ const TeachingPage: React.FC = () => {
 
   // ===== 后台发起文章生成 =====
   const startBgGenerate = useCallback((chapterIdx: number, sectionIdx: number) => {
+    if (batchAbortRef.current) return; // 停止后不再启动新任务
     const chaps = chaptersRef.current;
     const chapter = chaps[chapterIdx];
     const section = chapter?.sections[sectionIdx];
