@@ -256,7 +256,7 @@ const HomePage: React.FC = () => {
   return (
     <div
       style={{
-        height: '100%',
+        minHeight: '100vh',
         background: isDark
           ? 'radial-gradient(1200px 600px at 30% 10%, rgba(110,231,255,0.06), transparent 55%), radial-gradient(900px 500px at 80% 30%, rgba(34,197,94,0.04), transparent 55%), #0b1220'
           : 'linear-gradient(135deg, #f5f7fa 0%, #e4e9f0 100%)',
