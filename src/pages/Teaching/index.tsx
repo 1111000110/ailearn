@@ -1,24 +1,24 @@
 /**
  * 教学页面 —— 三栏布局：目录 | 教学内容 | AI 助教
  *
- * 核心数据流变更（相对旧版）：
- * - 课程大纲：从后端 /api/catalogue/detail 获取，不再每次 AI 生成
+ * 核心数据流：
+ * - 课程大纲：从后端 /api/catalogue/detail 获取
  * - 教学内容：
  *   · post_id > 0 → /api/post/detail 获取已有文章
- *   · post_id === 0 → AI 流式生成 → /api/post/create 保存 → /api/catalogue/update 绑定
- * - AI 对话：保持不变，仍走 Agent 流式接口
+ *   · post_id === 0 → AI 流式生成（后台运行，不随页面切换中断） → /api/post/create 保存 → /api/catalogue/update 绑定
+ * - AI 对话：走 Agent 流式接口
  */
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
-  Button, Typography, Tooltip, Input, Spin, Switch, Space,
+  Button, Typography, Tooltip, Input, Spin, Switch, Space, Progress, Dropdown,
 } from 'antd';
 import {
   ArrowLeftOutlined, SunOutlined, MoonOutlined, SendOutlined,
   RobotOutlined, ClearOutlined, LoadingOutlined, BookOutlined,
   RightOutlined, CaretRightOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  UndoOutlined, LoginOutlined,
+  UndoOutlined, LoginOutlined, ThunderboltOutlined, DownOutlined,
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -54,6 +54,7 @@ const useThemeColors = () => {
     muted: isDark ? 'rgba(255,255,255,0.55)' : '#888',
     accent: isDark ? '#6ee7ff' : '#1677ff',
     good: '#22c55e',
+    warn: '#faad14',
     codeBg: isDark ? 'rgba(0,0,0,0.25)' : '#f5f5f5',
     sidebarBg: isDark ? 'rgba(255,255,255,0.02)' : '#fafafa',
     hoverBg: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
@@ -64,26 +65,32 @@ const useThemeColors = () => {
 
 // ==================== 数据类型 ====================
 
-/** 章节（从 CatalogueStruct 第二层映射而来） */
 interface Chapter {
-  catalogueId: string;  // 对应后端 catalogue_id
+  catalogueId: string;
   title: string;
   sections: Section[];
 }
 
-/** 小节（从 CatalogueStruct 第三层映射而来） */
 interface Section {
   catalogueId: string;
   title: string;
   desc: string;
-  postId: string;  // 绑定的文章 ID，"0" 表示未绑定
-  /** 完整的后端目录信息，用于更新操作 */
+  postId: string;
   catalogue: CatalogueDetail;
+}
+
+/** 后台生成任务 */
+interface BgTask {
+  catalogueId: string;
+  chapterIdx: number;
+  sectionIdx: number;
+  status: 'generating' | 'saving' | 'done' | 'error';
+  progress: string; // 流式累积的 markdown
+  streamClient: StreamClient | null;
 }
 
 // ==================== 工具函数 ====================
 
-/** 流式调用 Agent */
 function callAgentStream(
   agentId: number, apiKey: string, content: string,
   onChunk: (text: string) => void,
@@ -121,7 +128,6 @@ function callAgentStream(
   return client;
 }
 
-/** 预处理 Markdown（修复 details/summary 标签前后缺少空行的问题） */
 function preprocessMarkdown(md: string): string {
   return md
     .replace(/([^\n])\n(<details)/g, '$1\n\n$2')
@@ -130,7 +136,6 @@ function preprocessMarkdown(md: string): string {
     .replace(/(<\/summary>)\n([^\n])/g, '$1\n\n$2');
 }
 
-/** 判断代码块是否可以运行（排除 shell/配置类代码） */
 function isRunnableCode(code: string, lang: string): boolean {
   const trimmed = code.trim();
   if (!trimmed) return false;
@@ -145,10 +150,6 @@ function isRunnableCode(code: string, lang: string): boolean {
   return codeLines.length >= 2;
 }
 
-/**
- * 将后端 CatalogueStruct 树映射为前端 Chapter[] 结构
- * 树结构：根 → 章节(level 1) → 小节(level 2)
- */
 function mapCatalogueToChapters(tree: CatalogueStruct): Chapter[] {
   if (!tree.catalogue_struct) return [];
   return tree.catalogue_struct.map(chapterNode => {
@@ -230,19 +231,33 @@ const TeachingPage: React.FC = () => {
   const { user } = useAuth();
   const colors = useThemeColors();
 
-  // ===== 目录数据（来自后端） =====
-  const [rootTitle, setRootTitle] = useState('');      // 根目录标题（如"Go 语言"）
+  // ===== 目录数据 =====
+  const [rootTitle, setRootTitle] = useState('');
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [isLoadingOutline, setIsLoadingOutline] = useState(true);
   const [expandedChapters, setExpandedChapters] = useState<Set<string>>(new Set());
   const [activeSection, setActiveSection] = useState<{ chapterIdx: number; sectionIdx: number } | null>(null);
 
-  // ===== 教学内容 =====
+  // ===== 教学内容（当前视图） =====
   const [sectionContent, setSectionContent] = useState('');
   const [isLoadingContent, setIsLoadingContent] = useState(false);
   const [contentProgress, setContentProgress] = useState('');
-  const contentCacheRef = useRef<Map<string, string>>(new Map()); // key = catalogueId
+  const contentCacheRef = useRef<Map<string, string>>(new Map());
   const codeEditsRef = useRef<Map<string, string>>(new Map());
+
+  // ===== 后台生成任务管理 =====
+  const bgTasksRef = useRef<Map<string, BgTask>>(new Map());
+  const [, forceUpdate] = useState(0); // 用于触发 re-render 更新 UI 状态
+  const chaptersRef = useRef<Chapter[]>([]);
+  const rootTitleRef = useRef('');
+  chaptersRef.current = chapters;
+  rootTitleRef.current = rootTitle;
+
+  // ===== 一键生成 =====
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [batchStopping, setBatchStopping] = useState(false);
+  const [batchConcurrency, setBatchConcurrency] = useState(3);
+  const batchAbortRef = useRef(false);
 
   // ===== AI 对话 =====
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
@@ -252,9 +267,7 @@ const TeachingPage: React.FC = () => {
   const chatStreamRef = useRef<StreamClient | null>(null);
   const chatAssistantRef = useRef('');
   const chatEndRef = useRef<HTMLDivElement>(null);
-  /** 当前对话的持久会话 ID，清空对话时重新生成 */
   const chatSessionIdRef = useRef(`ailearn_teach_chat_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
-  /** 标记本轮对话是否为首次发送（首次需要带上下文） */
   const isFirstChatRef = useRef(true);
 
   // ===== 面板与布局 =====
@@ -268,21 +281,68 @@ const TeachingPage: React.FC = () => {
   const [isAiPanelVisible, setIsAiPanelVisible] = useState(true);
   const prevRightWidthRef = useRef(0.24);
   const draggingRef = useRef<string | null>(null);
-  const contentStreamRef = useRef<StreamClient | null>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // ===== 自动滚动 =====
+  // ===== 自动滚动（仅对话） =====
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+
+  // ===== 当前查看的小节对应的后台任务 =====
+  const activeCatalogueId = activeSection
+    ? chapters[activeSection.chapterIdx]?.sections[activeSection.sectionIdx]?.catalogueId
+    : null;
+
+  // ===== 同步后台任务的流式进度到当前视图 =====
   useEffect(() => {
-    if (isLoadingContent && contentRef.current) contentRef.current.scrollTop = contentRef.current.scrollHeight;
-  }, [contentProgress, isLoadingContent]);
+    if (!activeCatalogueId) return;
+    const task = bgTasksRef.current.get(activeCatalogueId);
+    if (task && (task.status === 'generating' || task.status === 'saving')) {
+      setIsLoadingContent(true);
+      setContentProgress(task.progress);
+      setSectionContent('');
+    }
+  }, [activeCatalogueId]);
+
+  // 定时刷新当前视图（同步后台进度到 UI）
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!activeCatalogueId) return;
+      const task = bgTasksRef.current.get(activeCatalogueId);
+      if (!task) return;
+      if (task.status === 'generating') {
+        setContentProgress(task.progress);
+        setIsLoadingContent(true);
+      } else if (task.status === 'saving') {
+        setContentProgress(task.progress);
+        setIsLoadingContent(true);
+      } else if (task.status === 'done') {
+        const cached = contentCacheRef.current.get(activeCatalogueId);
+        if (cached) {
+          setSectionContent(cached);
+          setContentProgress('');
+          setIsLoadingContent(false);
+        }
+        bgTasksRef.current.delete(activeCatalogueId);
+        forceUpdate(n => n + 1);
+      } else if (task.status === 'error') {
+        setSectionContent('生成失败，请重新点击小节重试');
+        setContentProgress('');
+        setIsLoadingContent(false);
+        bgTasksRef.current.delete(activeCatalogueId);
+        forceUpdate(n => n + 1);
+      }
+    }, 300);
+    return () => clearInterval(timer);
+  }, [activeCatalogueId]);
 
   // ===== 清理 =====
   useEffect(() => {
-    return () => { chatStreamRef.current?.close(); contentStreamRef.current?.close(); };
+    return () => {
+      chatStreamRef.current?.close();
+      // 注意：不清理 bgTasks，让后台任务自然结束
+    };
   }, []);
 
-  // ===== 加载目录树（核心变更：从后端获取，不再 AI 生成） =====
+  // ===== 加载目录树 =====
   useEffect(() => {
     if (!catalogueId) return;
     setIsLoadingOutline(true);
@@ -294,14 +354,13 @@ const TeachingPage: React.FC = () => {
         }
         const mapped = mapCatalogueToChapters(tree);
         setChapters(mapped);
-        // 默认展开第一章
         if (mapped.length > 0) setExpandedChapters(new Set([mapped[0].catalogueId]));
       })
       .catch(() => { /* client 已处理 */ })
       .finally(() => setIsLoadingOutline(false));
   }, [catalogueId]);
 
-  // ===== 面板拖拽（直接操作 DOM 提升性能） =====
+  // ===== 面板拖拽 =====
   const handleMouseDown = useCallback((kind: string) => {
     draggingRef.current = kind;
     document.body.style.cursor = 'col-resize';
@@ -352,7 +411,6 @@ const TeachingPage: React.FC = () => {
     return () => { window.removeEventListener('mousemove', handleMouseMove); window.removeEventListener('mouseup', handleMouseUp); cancelAnimationFrame(rafId); };
   }, []);
 
-  // ===== AI 面板切换 =====
   const toggleAiPanel = useCallback(() => {
     if (isAiPanelVisible) {
       prevRightWidthRef.current = rightWidth > 0.12 ? rightWidth : 0.24;
@@ -363,20 +421,90 @@ const TeachingPage: React.FC = () => {
     }
   }, [isAiPanelVisible, rightWidth]);
 
-  // ===== 加载小节内容（核心逻辑） =====
+  // ===== 后台发起文章生成 =====
+  const startBgGenerate = useCallback((chapterIdx: number, sectionIdx: number) => {
+    const chaps = chaptersRef.current;
+    const chapter = chaps[chapterIdx];
+    const section = chapter?.sections[sectionIdx];
+    if (!section || !user) return;
+    if (section.postId && section.postId !== '0') return; // 已有文章
+    if (bgTasksRef.current.has(section.catalogueId)) return; // 已在生成
+
+    const task: BgTask = {
+      catalogueId: section.catalogueId,
+      chapterIdx, sectionIdx,
+      status: 'generating',
+      progress: '',
+      streamClient: null,
+    };
+    bgTasksRef.current.set(section.catalogueId, task);
+    forceUpdate(n => n + 1);
+
+    const prompt = `请为「${rootTitleRef.current}」课程中的「${chapter.title} - ${section.title}」生成详细的教学内容。${section.desc ? `补充描述为：${section.desc}` : ''}`;
+    const { agent_id, api_key } = AGENT_CONFIG.contentGenerator;
+
+    task.streamClient = callAgentStream(
+      agent_id, api_key, prompt,
+      (text) => {
+        task.progress = text;
+        // 不 setState，靠定时器同步
+      },
+      async (fullText) => {
+        task.streamClient = null;
+        task.status = 'saving';
+        task.progress = fullText;
+        contentCacheRef.current.set(section.catalogueId, fullText);
+
+        try {
+          const postResp = await createPost({
+            title: `${chapter.title} - ${section.title}`,
+            content: fullText,
+            images: [],
+            theme: rootTitleRef.current,
+            tags: [],
+            status: 1,
+          });
+          const newPostId = postResp.post_id;
+
+          await updateCatalogue({
+            catalogue_detail: { ...section.catalogue, post_id: newPostId },
+            catalogue_id: section.catalogueId,
+            update_field: ['post_id'],
+          });
+
+          // 更新 chapters 状态
+          setChapters(prev => {
+            const next = [...prev];
+            const ch = { ...next[chapterIdx] };
+            const secs = [...ch.sections];
+            secs[sectionIdx] = { ...secs[sectionIdx], postId: newPostId };
+            ch.sections = secs;
+            next[chapterIdx] = ch;
+            return next;
+          });
+
+          task.status = 'done';
+        } catch (err) {
+          console.error('保存文章失败:', err);
+          task.status = 'done'; // 虽然保存失败，但内容已生成，让用户能看到
+        }
+        forceUpdate(n => n + 1);
+      },
+      (err) => {
+        task.streamClient = null;
+        task.status = 'error';
+        task.progress = `生成失败: ${err}`;
+        forceUpdate(n => n + 1);
+      },
+    );
+  }, [user]);
+
+  // ===== 加载小节内容（点击小节） =====
   const handleLoadSection = (chapterIdx: number, sectionIdx: number) => {
     const chapter = chapters[chapterIdx];
     const section = chapter.sections[sectionIdx];
 
-    // 相同小节点击忽略
     if (activeSection?.chapterIdx === chapterIdx && activeSection?.sectionIdx === sectionIdx && !isLoadingContent) return;
-
-    // 取消正在进行的流
-    if (isLoadingContent) {
-      contentStreamRef.current?.close();
-      contentStreamRef.current = null;
-      setIsLoadingContent(false);
-    }
 
     setActiveSection({ chapterIdx, sectionIdx });
 
@@ -385,11 +513,21 @@ const TeachingPage: React.FC = () => {
     if (cached) {
       setSectionContent(cached);
       setContentProgress('');
+      setIsLoadingContent(false);
       if (contentRef.current) contentRef.current.scrollTop = 0;
       return;
     }
 
-    // 2. post_id 有效 → 从后端获取已有文章
+    // 2. 后台任务正在跑 → 让定时器同步状态，这里只切换视图
+    const task = bgTasksRef.current.get(section.catalogueId);
+    if (task) {
+      setContentProgress(task.progress);
+      setSectionContent('');
+      setIsLoadingContent(task.status === 'generating' || task.status === 'saving');
+      return;
+    }
+
+    // 3. 有 postId → 从后端获取
     if (section.postId && section.postId !== '0') {
       setIsLoadingContent(true);
       setSectionContent('');
@@ -406,76 +544,83 @@ const TeachingPage: React.FC = () => {
       return;
     }
 
-    // 3. post_id === "0" 且未登录 → 提示登录
+    // 4. 未登录
     if (!user) {
       setSectionContent('');
       setContentProgress('');
+      setIsLoadingContent(false);
       return;
     }
 
-    // 4. post_id === "0" 且已登录 → AI 生成 → 创建文章 → 绑定目录
-    setIsLoadingContent(true);
+    // 5. 启动后台生成
     setSectionContent('');
     setContentProgress('');
-
-    const prompt = `请为「${rootTitle}」课程中的「${chapter.title} - ${section.title}」生成详细的教学内容。${section.desc ? `补充描述为：${section.desc}` : ''}`;
-
-    const { agent_id, api_key } = AGENT_CONFIG.contentGenerator;
-    contentStreamRef.current?.close();
-    contentStreamRef.current = callAgentStream(
-      agent_id, api_key, prompt,
-      (text) => setContentProgress(text),
-      async (fullText) => {
-        contentStreamRef.current = null;
-        setSectionContent(fullText);
-        setContentProgress('');
-        contentCacheRef.current.set(section.catalogueId, fullText);
-        if (contentRef.current) contentRef.current.scrollTop = 0;
-
-        // AI 生成完毕 → 保存为帖子并绑定到目录
-        try {
-          // 创建帖子
-          const postResp = await createPost({
-            title: `${chapter.title} - ${section.title}`,
-            content: fullText,
-            images: [],
-            theme: rootTitle,
-            tags: [],
-            status: 1,
-          });
-          const newPostId = postResp.post_id;
-
-          // 更新目录绑定 post_id
-          await updateCatalogue({
-            catalogue_detail: { ...section.catalogue, post_id: newPostId },
-            catalogue_id: section.catalogueId,
-            update_field: ['post_id'],
-          });
-
-          // 更新本地 chapters 状态，避免重复生成
-          setChapters(prev => {
-            const next = [...prev];
-            const ch = { ...next[chapterIdx] };
-            const secs = [...ch.sections];
-            secs[sectionIdx] = { ...secs[sectionIdx], postId: newPostId };
-            ch.sections = secs;
-            next[chapterIdx] = ch;
-            return next;
-          });
-        } catch (err) {
-          console.error('保存文章失败:', err);
-          // 不影响内容展示，用户可以正常阅读 AI 生成的内容
-        }
-
-        setIsLoadingContent(false);
-      },
-      (err) => {
-        setIsLoadingContent(false);
-        contentStreamRef.current = null;
-        setSectionContent(`加载失败: ${err}`);
-      },
-    );
+    setIsLoadingContent(true);
+    startBgGenerate(chapterIdx, sectionIdx);
   };
+
+  // ===== 一键生成所有文章（支持并发控制） =====
+  const handleBatchGenerate = useCallback(async () => {
+    if (!user || batchGenerating) return;
+    setBatchGenerating(true);
+    batchAbortRef.current = false;
+
+    const chaps = chaptersRef.current;
+    // 收集所有待生成的小节
+    const pending: { ci: number; si: number; catalogueId: string }[] = [];
+    for (let ci = 0; ci < chaps.length; ci++) {
+      for (let si = 0; si < chaps[ci].sections.length; si++) {
+        const sec = chaps[ci].sections[si];
+        if ((sec.postId && sec.postId !== '0') || contentCacheRef.current.has(sec.catalogueId)) continue;
+        if (bgTasksRef.current.has(sec.catalogueId)) continue;
+        pending.push({ ci, si, catalogueId: sec.catalogueId });
+      }
+    }
+
+    // 并发池
+    let idx = 0;
+    const runWorker = async () => {
+      while (idx < pending.length) {
+        if (batchAbortRef.current) return;
+        const job = pending[idx++];
+        startBgGenerate(job.ci, job.si);
+        // 等待该任务完成
+        await new Promise<void>((resolve) => {
+          const check = () => {
+            const t = bgTasksRef.current.get(job.catalogueId);
+            if (!t || t.status === 'done' || t.status === 'error') { resolve(); return; }
+            setTimeout(check, 500);
+          };
+          check();
+        });
+      }
+    };
+
+    const workers = Array.from({ length: Math.min(batchConcurrency, pending.length) }, () => runWorker());
+    await Promise.all(workers);
+    setBatchGenerating(false);
+  }, [user, batchGenerating, batchConcurrency, startBgGenerate]);
+
+  const handleStopBatch = useCallback(() => {
+    setBatchStopping(true);
+    batchAbortRef.current = true;
+    // 不关闭正在进行的流，让它们自然完成
+    // 等所有正在生成的任务完成后再重置状态
+    const waitRunning = () => {
+      let hasRunning = false;
+      bgTasksRef.current.forEach(task => {
+        if (task.status === 'generating' || task.status === 'saving') hasRunning = true;
+      });
+      if (hasRunning) {
+        setTimeout(waitRunning, 500);
+      } else {
+        setBatchGenerating(false);
+        setBatchStopping(false);
+        batchAbortRef.current = false;
+      }
+    };
+    waitRunning();
+  }, []);
 
   // ===== 切换章节展开 =====
   const toggleChapter = (id: string) => {
@@ -486,12 +631,17 @@ const TeachingPage: React.FC = () => {
     });
   };
 
+  // ===== 计算批量进度 =====
+  const totalSections = chapters.reduce((sum, ch) => sum + ch.sections.length, 0);
+  const completedSections = chapters.reduce((sum, ch) =>
+    sum + ch.sections.filter(s => (s.postId && s.postId !== '0') || contentCacheRef.current.has(s.catalogueId)).length, 0);
+  const generatingCount = bgTasksRef.current.size;
+
   // ===== AI 对话 =====
   const handleChatSend = () => {
     if (!chatInput.trim() || isChatStreaming) return;
     const { agent_id, api_key } = AGENT_CONFIG.teachingAssistant;
 
-    // 仅在本轮首次发送且开启上下文时，携带教学内容
     let userContent = chatInput;
     if (isFirstChatRef.current && includeContext && sectionContent && activeSection) {
       const sec = chapters[activeSection.chapterIdx]?.sections[activeSection.sectionIdx];
@@ -591,11 +741,9 @@ ${sectionContent.slice(0, 3000)}
     );
   }
 
-  // ===== 获取当前选中小节信息 =====
   const currentSection = activeSection
     ? chapters[activeSection.chapterIdx]?.sections[activeSection.sectionIdx]
     : null;
-  // 未登录且 postId==="0" 时显示的占位
   const needLogin = currentSection && (!currentSection.postId || currentSection.postId === '0') && !user;
 
   // ============================= JSX =============================
@@ -617,6 +765,82 @@ ${sectionContent.slice(0, 3000)}
           </span>
         </div>
         <div style={{ flex: 1 }} />
+
+        {/* 一键生成按钮 / 进度 */}
+        {user && chapters.length > 0 && (
+          batchGenerating ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 120 }}>
+                <Progress
+                  percent={totalSections > 0 ? Math.round(completedSections / totalSections * 100) : 0}
+                  size="small"
+                  strokeColor={colors.accent}
+                  format={() => `${completedSections}/${totalSections}`}
+                />
+              </div>
+              <span style={{ fontSize: 11, color: colors.warn }}>
+                <LoadingOutlined style={{ marginRight: 4 }} />
+                并发 {batchConcurrency} · 生成中 {generatingCount > 0 ? `(${generatingCount})` : ''}
+              </span>
+              <Button
+                size="small"
+                danger={!batchStopping}
+                onClick={handleStopBatch}
+                loading={batchStopping}
+                style={{
+                  borderRadius: 6, fontSize: 12,
+                  ...(batchStopping ? {
+                    background: colors.warn,
+                    borderColor: colors.warn,
+                    color: '#fff',
+                  } : {}),
+                }}
+              >
+                {batchStopping ? '停止中...' : '停止'}
+              </Button>
+            </div>
+          ) : totalSections - completedSections > 0 ? (
+            <Space.Compact size="small">
+              <Button
+                icon={<ThunderboltOutlined />}
+                onClick={handleBatchGenerate}
+                style={{
+                  borderRadius: '8px 0 0 8px', fontSize: 12,
+                  border: `1px solid ${colors.isDark ? 'rgba(250,173,20,0.4)' : '#faad14'}`,
+                  color: colors.isDark ? '#fadb14' : '#d48806',
+                  background: colors.isDark ? 'rgba(250,173,20,0.08)' : 'rgba(250,173,20,0.06)',
+                }}
+              >
+                一键生成 ({totalSections - completedSections})
+              </Button>
+              <Dropdown
+                menu={{
+                  items: [1, 2, 3, 5, 8].map(n => ({
+                    key: String(n),
+                    label: `并发 ${n}`,
+                    style: n === batchConcurrency ? { color: colors.accent, fontWeight: 600 } : undefined,
+                  })),
+                  onClick: ({ key }) => setBatchConcurrency(Number(key)),
+                  selectedKeys: [String(batchConcurrency)],
+                }}
+                trigger={['click']}
+              >
+                <Button
+                  style={{
+                    borderRadius: '0 8px 8px 0', fontSize: 11, padding: '0 6px',
+                    border: `1px solid ${colors.isDark ? 'rgba(250,173,20,0.4)' : '#faad14'}`,
+                    borderLeft: 'none',
+                    color: colors.isDark ? '#fadb14' : '#d48806',
+                    background: colors.isDark ? 'rgba(250,173,20,0.08)' : 'rgba(250,173,20,0.06)',
+                  }}
+                >
+                  ×{batchConcurrency} <DownOutlined style={{ fontSize: 9 }} />
+                </Button>
+              </Dropdown>
+            </Space.Compact>
+          ) : null
+        )}
+
         <Tooltip title={isAiPanelVisible ? '收起 AI 助教' : '展开 AI 助教'}>
           <Button type="text" size="small"
             icon={isAiPanelVisible ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />}
@@ -631,7 +855,7 @@ ${sectionContent.slice(0, 3000)}
       {/* ===== 三栏主体 ===== */}
       <div ref={containerRef} style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
 
-        {/* ---- 左侧：课程目录（从后端数据渲染） ---- */}
+        {/* ---- 左侧：课程目录 ---- */}
         <section ref={leftPanelRef} style={{
           width: `${leftWidth * 100}%`, flexShrink: 0, height: '100%', overflow: 'hidden',
           borderRight: `1px solid ${colors.stroke}`, display: 'flex', flexDirection: 'column',
@@ -643,7 +867,9 @@ ${sectionContent.slice(0, 3000)}
             background: colors.isDark ? 'rgba(255,255,255,0.02)' : '#fff', flexShrink: 0,
           }}>
             <span style={{ fontWeight: 650, fontSize: 13, color: colors.text }}>课程目录</span>
-            <span style={{ fontSize: 11, color: colors.muted }}>{chapters.length > 0 ? `${chapters.length} 章` : ''}</span>
+            <span style={{ fontSize: 11, color: colors.muted }}>
+              {chapters.length > 0 ? `${completedSections}/${totalSections} 已完成` : ''}
+            </span>
           </div>
           <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
             {isLoadingOutline ? (
@@ -661,7 +887,6 @@ ${sectionContent.slice(0, 3000)}
                 const isExpanded = expandedChapters.has(chapter.catalogueId);
                 return (
                   <div key={chapter.catalogueId}>
-                    {/* 章节标题 */}
                     <div
                       onClick={() => toggleChapter(chapter.catalogueId)}
                       style={{
@@ -676,10 +901,11 @@ ${sectionContent.slice(0, 3000)}
                       <span style={{ fontSize: 13, fontWeight: 600, color: colors.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{chapter.title}</span>
                       <span style={{ fontSize: 11, color: colors.muted }}>{chapter.sections.length}</span>
                     </div>
-                    {/* 小节列表 */}
                     {isExpanded && chapter.sections.map((section, si) => {
                       const isActive = activeSection?.chapterIdx === ci && activeSection?.sectionIdx === si;
                       const hasContent = (section.postId && section.postId !== '0') || contentCacheRef.current.has(section.catalogueId);
+                      const bgTask = bgTasksRef.current.get(section.catalogueId);
+                      const isGenerating = bgTask && (bgTask.status === 'generating' || bgTask.status === 'saving');
                       return (
                         <div key={section.catalogueId}>
                           <div
@@ -695,10 +921,13 @@ ${sectionContent.slice(0, 3000)}
                           >
                             <span style={{ fontSize: 11, color: colors.muted, minWidth: 24 }}>{ci + 1}.{si + 1}</span>
                             <span style={{ fontSize: 12.5, color: isActive ? colors.activeText : colors.text, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: isActive ? 600 : 400 }}>{section.title}</span>
-                            {isActive && isLoadingContent && <LoadingOutlined style={{ fontSize: 11, color: colors.accent }} />}
-                            {/* 绿色圆点表示已有内容 */}
-                            {hasContent && !isActive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.good, flexShrink: 0 }} />}
-                            {hasContent && isActive && !isLoadingContent && <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.good, flexShrink: 0 }} />}
+                            {/* 状态指示器 */}
+                            {isGenerating && (
+                              <LoadingOutlined style={{ fontSize: 11, color: colors.warn }} />
+                            )}
+                            {hasContent && !isGenerating && (
+                              <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.good, flexShrink: 0 }} />
+                            )}
                           </div>
                         </div>
                       );
@@ -718,7 +947,6 @@ ${sectionContent.slice(0, 3000)}
         {/* ---- 中间：教学内容 ---- */}
         <section style={{ flex: 1, minWidth: 0, height: '100%', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: colors.panel }}>
           <div ref={contentRef} style={{ flex: 1, overflow: 'auto', padding: '24px 32px 60px' }}>
-            {/* 加载中（AI 流式生成） */}
             {isLoadingContent ? (
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
@@ -751,7 +979,6 @@ ${sectionContent.slice(0, 3000)}
                 )}
               </div>
             ) : needLogin ? (
-              /* 未登录提示 */
               <div style={{ textAlign: 'center', padding: '80px 20px', color: colors.muted }}>
                 <LoginOutlined style={{ fontSize: 48, marginBottom: 20, opacity: 0.2 }} />
                 <div style={{ fontSize: 16, marginBottom: 8 }}>该小节尚无内容</div>
@@ -759,7 +986,6 @@ ${sectionContent.slice(0, 3000)}
                 <Button type="primary" onClick={() => navigate('/auth')}>去登录</Button>
               </div>
             ) : sectionContent ? (
-              /* 正常渲染文章 */
               <div className="markdown-body" style={{ fontSize: 14, lineHeight: 1.8 }}>
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeRaw, rehypeKatex]}
                   components={{
@@ -781,7 +1007,6 @@ ${sectionContent.slice(0, 3000)}
                 </ReactMarkdown>
               </div>
             ) : (
-              /* 空状态 */
               <div style={{ textAlign: 'center', padding: '80px 20px', color: colors.muted }}>
                 <BookOutlined style={{ fontSize: 48, marginBottom: 20, opacity: 0.2 }} />
                 <div style={{ fontSize: 16, marginBottom: 8 }}>选择左侧目录开始学习</div>
@@ -832,7 +1057,6 @@ ${sectionContent.slice(0, 3000)}
                   </Tooltip>
                 </Space>
               </div>
-              {/* 对话列表 */}
               <div style={{ flex: 1, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {chatMessages.length === 0 && (
                   <div style={{ textAlign: 'center', padding: '40px 16px', color: colors.muted, fontSize: 13 }}>
@@ -860,7 +1084,6 @@ ${sectionContent.slice(0, 3000)}
                 )}
                 <div ref={chatEndRef} />
               </div>
-              {/* 输入框 */}
               <div style={{
                 padding: 10, borderTop: `1px solid ${colors.stroke}`,
                 background: colors.isDark ? 'rgba(255,255,255,0.02)' : '#fff',
@@ -880,7 +1103,6 @@ ${sectionContent.slice(0, 3000)}
           </section>
         )}
 
-        {/* AI 面板收起时的展开按钮 */}
         {!isAiPanelVisible && (
           <div onClick={toggleAiPanel} style={{
             position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)',
