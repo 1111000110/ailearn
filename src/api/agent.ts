@@ -44,9 +44,18 @@ export const runAgentStream = (data: RunAgentStreamReq): StreamClient => {
 
   const fetchData = async () => {
     try {
+      // 从 localStorage 获取 token
+      const token = localStorage.getItem('token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(`${client.defaults.baseURL}/api/ai/agent/run/stream`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify(data),
         signal: controller.signal,
       });
