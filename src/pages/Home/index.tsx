@@ -16,7 +16,13 @@ import {
   ReloadOutlined,
   LoadingOutlined,
   ThunderboltOutlined,
-  RightOutlined,
+  WechatOutlined,
+  MailOutlined,
+  FileTextOutlined,
+  SafetyOutlined,
+  ArrowRightOutlined,
+  CodeOutlined,
+  RocketOutlined,
 } from '@ant-design/icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -268,11 +274,11 @@ const HomePage: React.FC = () => {
       {/* ===== 顶部栏 ===== */}
       <header
         style={{
-          height: 56,
+          height: 64,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 24px',
+          padding: '0 32px',
           borderBottom: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : '#e8e8e8'}`,
           background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.8)',
           backdropFilter: 'blur(8px)',
@@ -280,30 +286,43 @@ const HomePage: React.FC = () => {
         }}
       >
         {/* 左侧 Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <div
             style={{
-              width: 12, height: 12, borderRadius: 999,
-              background: 'radial-gradient(circle at 30% 30%, #fff, #6ee7ff)',
-              boxShadow: '0 0 18px rgba(110,231,255,0.35)',
-            }}
-          />
-          <span style={{ fontWeight: 700, fontSize: 16, color: isDark ? 'rgba(255,255,255,0.92)' : '#1a1a1a', letterSpacing: 0.2 }}>
-            码力学社
-          </span>
-          <span
-            style={{
-              fontSize: 12, padding: '2px 8px', borderRadius: 999,
-              border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : '#d9d9d9'}`,
-              color: isDark ? 'rgba(255,255,255,0.5)' : '#999',
+              width: 36, height: 36, borderRadius: 10,
+              background: 'linear-gradient(135deg, #1677ff 0%, #52c41a 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 4px 14px rgba(22, 119, 255, 0.4)',
             }}
           >
-            Beta
-          </span>
+            <CodeOutlined style={{ fontSize: 18, color: '#fff' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ 
+              fontWeight: 700, 
+              fontSize: 18, 
+              color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a', 
+              letterSpacing: -0.3 
+            }}>
+              码力学社
+            </span>
+            <span
+              style={{
+                fontSize: 11, 
+                padding: '3px 10px', 
+                borderRadius: 20,
+                background: isDark ? 'rgba(22, 119, 255, 0.2)' : 'rgba(22, 119, 255, 0.1)',
+                color: '#1677ff',
+                fontWeight: 500,
+              }}
+            >
+              Beta
+            </span>
+          </div>
         </div>
 
         {/* 右侧操作 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {user ? (
             <Dropdown
               menu={{
@@ -313,66 +332,264 @@ const HomePage: React.FC = () => {
                 ],
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-                <Avatar size={28} src={user.avatar} />
-                <span style={{ color: isDark ? 'rgba(255,255,255,0.85)' : '#333' }}>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 10, 
+                cursor: 'pointer',
+                padding: '6px 12px',
+                borderRadius: 8,
+                transition: 'background 0.2s',
+              }}>
+                <Avatar size={32} src={user.avatar} style={{ border: `2px solid ${isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}` }} />
+                <span style={{ 
+                  color: isDark ? 'rgba(255,255,255,0.9)' : '#333',
+                  fontWeight: 500,
+                }}>
                   {user.nickName || '用户'}
                 </span>
               </div>
             </Dropdown>
           ) : (
-            <Button type="primary" onClick={() => navigate('/auth')}>登录</Button>
+            <Button 
+              type="primary" 
+              size="middle"
+              onClick={() => navigate('/auth')}
+              style={{
+                borderRadius: 8,
+                height: 36,
+                padding: '0 20px',
+              }}
+            >
+              登录
+            </Button>
           )}
           <Tooltip title={isDark ? '切换到亮色模式' : '切换到暗色模式'}>
             <Button
               type="text"
               icon={isDark ? <SunOutlined /> : <MoonOutlined />}
               onClick={toggleTheme}
-              style={{ color: isDark ? 'rgba(255,255,255,0.68)' : '#666' }}
+              style={{ 
+                color: isDark ? 'rgba(255,255,255,0.7)' : '#666',
+                width: 36,
+                height: 36,
+                borderRadius: 8,
+              }}
             />
           </Tooltip>
         </div>
       </header>
 
       {/* ===== 主内容 ===== */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 24px 60px' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 24px 60px' }}>
         {/* Hero 标题区 */}
         <div style={{ textAlign: 'center', marginBottom: 48 }}>
-          <Title level={1} style={{ margin: 0, fontSize: 36, color: isDark ? 'rgba(255,255,255,0.92)' : '#1a1a1a', fontWeight: 800 }}>
-            码力学，码上会
+          {/* 标签 */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 16px',
+            borderRadius: 20,
+            background: isDark ? 'rgba(22, 119, 255, 0.15)' : 'rgba(22, 119, 255, 0.08)',
+            border: `1px solid ${isDark ? 'rgba(22, 119, 255, 0.3)' : 'rgba(22, 119, 255, 0.2)'}`,
+            marginBottom: 24,
+          }}>
+            <ThunderboltOutlined style={{ color: '#1677ff', fontSize: 14 }} />
+            <span style={{ 
+              fontSize: 13, 
+              color: isDark ? 'rgba(255,255,255,0.8)' : '#1677ff',
+              fontWeight: 500,
+            }}>
+              AI 驱动的智能学习平台
+            </span>
+          </div>
+          
+          {/* 主标题 */}
+          <Title level={1} style={{ 
+            margin: 0, 
+            fontSize: 48, 
+            fontWeight: 800,
+            letterSpacing: -1.5,
+            lineHeight: 1.1,
+            marginBottom: 20,
+          }}>
+            <span style={{ color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a' }}>码力学，</span>
+            <span style={{
+              background: 'linear-gradient(135deg, #1677ff 0%, #52c41a 50%, #faad14 100%)',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              backgroundClip: 'text',
+            }}>码上会</span>
           </Title>
-          <Paragraph style={{ marginTop: 12, fontSize: 16, color: isDark ? 'rgba(255,255,255,0.55)' : '#888', maxWidth: 560 }}>
-            AI 驱动的编程学习平台 —— 系统教学掌握知识体系，实战训练巩固编程能力
+          
+          {/* 副标题 */}
+          <Paragraph style={{ 
+            margin: 0, 
+            fontSize: 18, 
+            lineHeight: 1.7,
+            color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+            maxWidth: 560,
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}>
+            系统化教学掌握知识体系，AI 实战训练巩固编程能力
+            <br />
+            让每一次学习都高效且有针对性
           </Paragraph>
+          
+          {/* CTA 按钮 */}
+          <div style={{ 
+            display: 'flex', 
+            gap: 16, 
+            justifyContent: 'center',
+            marginTop: 32,
+          }}>
+            <Button
+              type="primary"
+              size="large"
+              icon={<RocketOutlined />}
+              onClick={() => {
+                const el = document.getElementById('teaching-section');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              style={{
+                height: 48,
+                padding: '0 28px',
+                borderRadius: 12,
+                fontSize: 16,
+                fontWeight: 600,
+                background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+                border: 'none',
+                boxShadow: '0 4px 14px rgba(22, 119, 255, 0.4)',
+              }}
+            >
+              开始学习
+            </Button>
+            <Button
+              size="large"
+              icon={<ThunderboltOutlined />}
+              onClick={() => {
+                const el = document.getElementById('training-section');
+                el?.scrollIntoView({ behavior: 'smooth' });
+              }}
+              style={{
+                height: 48,
+                padding: '0 28px',
+                borderRadius: 12,
+                fontSize: 16,
+                fontWeight: 600,
+                border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : '#d9d9d9'}`,
+                background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.8)',
+                color: isDark ? 'rgba(255,255,255,0.9)' : '#333',
+              }}
+            >
+              编程训练
+            </Button>
+          </div>
+        </div>
+
+        {/* 统计数据展示 */}
+        <div style={{
+          display: 'flex',
+          gap: 48,
+          marginBottom: 64,
+          padding: '24px 48px',
+          borderRadius: 16,
+          background: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.6)',
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+          backdropFilter: 'blur(10px)',
+        }}>
+          {[
+            { value: '10+', label: '编程科目' },
+            { value: '1000+', label: 'AI 题目' },
+            { value: '∞', label: '学习模块' },
+          ].map((stat, index) => (
+            <div key={index} style={{ textAlign: 'center' }}>
+              <div style={{
+                fontSize: 28,
+                fontWeight: 700,
+                color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a',
+                lineHeight: 1,
+              }}>{stat.value}</div>
+              <div style={{
+                fontSize: 13,
+                color: isDark ? 'rgba(255,255,255,0.5)' : '#888',
+                marginTop: 6,
+              }}>{stat.label}</div>
+            </div>
+          ))}
         </div>
 
         {/* ==================== 教学模块区 ==================== */}
-        <div style={{ width: '100%', maxWidth: 1060, marginBottom: 56 }}>
+        <div id="teaching-section" style={{ width: '100%', maxWidth: 1060, marginBottom: 72 }}>
           {/* 区域标题 */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 32, height: 32, borderRadius: 8,
-                background: isDark ? 'rgba(22,119,255,0.15)' : 'rgba(22,119,255,0.08)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'flex-end', 
+            justifyContent: 'space-between', 
+            marginBottom: 28,
+          }}>
+            <div>
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 12,
+                marginBottom: 8,
               }}>
-                <BookOutlined style={{ fontSize: 16, color: '#1677ff' }} />
-              </div>
-              <div>
-                <div style={{ fontSize: 17, fontWeight: 700, color: isDark ? 'rgba(255,255,255,0.92)' : '#1a1a1a' }}>
-                  教学模块
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10,
+                  background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(22, 119, 255, 0.3)',
+                }}>
+                  <BookOutlined style={{ fontSize: 18, color: '#fff' }} />
                 </div>
-                <div style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.45)' : '#999', marginTop: 1 }}>
-                  AI 生成的系统化课程，章节式教学
+                <div>
+                  <div style={{ 
+                    fontSize: 22, 
+                    fontWeight: 700, 
+                    color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a',
+                    letterSpacing: -0.3,
+                  }}>
+                    教学模块
+                  </div>
+                  <div style={{ 
+                    fontSize: 14, 
+                    color: isDark ? 'rgba(255,255,255,0.5)' : '#888',
+                    marginTop: 2,
+                  }}>
+                    AI 生成的系统化课程，章节式渐进学习
+                  </div>
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 10 }}>
               <Tooltip title="刷新列表">
-                <Button size="small" icon={<ReloadOutlined />} onClick={loadModules} loading={loading} />
+                <Button 
+                  size="middle" 
+                  icon={<ReloadOutlined />} 
+                  onClick={loadModules} 
+                  loading={loading}
+                  style={{
+                    borderRadius: 8,
+                    width: 36,
+                    height: 36,
+                  }}
+                />
               </Tooltip>
               {user && (
-                <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+                <Button 
+                  type="primary" 
+                  size="middle" 
+                  icon={<PlusOutlined />} 
+                  onClick={() => setCreateOpen(true)}
+                  style={{
+                    borderRadius: 8,
+                    height: 36,
+                    padding: '0 16px',
+                  }}
+                >
                   创建模块
                 </Button>
               )}
@@ -381,30 +598,53 @@ const HomePage: React.FC = () => {
 
           {/* 模块卡片 */}
           {loading ? (
-            <div style={{ padding: 60, textAlign: 'center' }}>
-              <Spin indicator={<LoadingOutlined style={{ fontSize: 32 }} />} />
-              <div style={{ marginTop: 16, color: isDark ? 'rgba(255,255,255,0.55)' : '#888' }}>加载中...</div>
+            <div style={{ padding: 80, textAlign: 'center' }}>
+              <Spin indicator={<LoadingOutlined style={{ fontSize: 40 }} />} />
+              <div style={{ marginTop: 20, color: isDark ? 'rgba(255,255,255,0.55)' : '#888', fontSize: 15 }}>加载中...</div>
             </div>
           ) : modules.length === 0 ? (
             <div style={{
-              textAlign: 'center', padding: '48px 20px',
-              borderRadius: 16,
-              border: `1px dashed ${isDark ? 'rgba(255,255,255,0.12)' : '#d9d9d9'}`,
+              textAlign: 'center', 
+              padding: '64px 32px',
+              borderRadius: 20,
+              border: `1px dashed ${isDark ? 'rgba(255,255,255,0.15)' : '#d9d9d9'}`,
               background: isDark ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.5)',
-              color: isDark ? 'rgba(255,255,255,0.45)' : '#999',
+              color: isDark ? 'rgba(255,255,255,0.5)' : '#999',
             }}>
-              <BookOutlined style={{ fontSize: 40, marginBottom: 14, opacity: 0.3 }} />
-              <div style={{ fontSize: 15, marginBottom: 6 }}>暂无学习模块</div>
-              <div style={{ fontSize: 13, marginBottom: 16 }}>
+              <div style={{
+                width: 80,
+                height: 80,
+                borderRadius: 20,
+                background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 20px',
+              }}>
+                <BookOutlined style={{ fontSize: 36, opacity: 0.4 }} />
+              </div>
+              <div style={{ fontSize: 17, marginBottom: 8, fontWeight: 500, color: isDark ? 'rgba(255,255,255,0.7)' : '#666' }}>
+                暂无学习模块
+              </div>
+              <div style={{ fontSize: 14, marginBottom: 20, color: isDark ? 'rgba(255,255,255,0.45)' : '#999' }}>
                 {user ? '点击「创建模块」开始构建你的第一个学习模块' : '登录后可以创建学习模块'}
               </div>
-              {!user && <Button type="primary" size="small" onClick={() => navigate('/auth')}>去登录</Button>}
+              {!user && (
+                <Button 
+                  type="primary" 
+                  size="middle" 
+                  onClick={() => navigate('/auth')}
+                  style={{ borderRadius: 8 }}
+                >
+                  去登录
+                </Button>
+              )}
             </div>
           ) : (
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-              gap: 14,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+              gap: 16,
             }}>
               {modules.map((mod) => {
                 const cat = mod.catalogue;
@@ -420,48 +660,90 @@ const HomePage: React.FC = () => {
                     onMouseLeave={() => setHoveredId(null)}
                     onClick={() => navigate(`/teaching/${cat.catalogue_id}`)}
                     style={{
-                      padding: 18,
-                      borderRadius: 14,
+                      padding: 24,
+                      borderRadius: 16,
                       cursor: 'pointer',
                       border: `1px solid ${
                         isHovered
-                          ? isDark ? 'rgba(110,231,255,0.3)' : color
+                          ? isDark ? `${color}50` : color
                           : isDark ? 'rgba(255,255,255,0.10)' : '#e8e8e8'
                       }`,
                       background: isDark
                         ? isHovered ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)'
                         : isHovered ? '#fff' : 'rgba(255,255,255,0.7)',
                       transition: 'all 0.2s ease',
-                      transform: isHovered ? 'translateY(-2px)' : 'none',
+                      transform: isHovered ? 'translateY(-4px)' : 'none',
                       boxShadow: isHovered
-                        ? isDark ? '0 8px 24px rgba(0,0,0,0.3)' : '0 8px 24px rgba(0,0,0,0.08)'
-                        : 'none',
+                        ? isDark ? `0 12px 32px rgba(0,0,0,0.4), 0 0 0 1px ${color}30` : `0 12px 32px rgba(0,0,0,0.1), 0 0 0 1px ${color}20`
+                        : isDark ? '0 4px 12px rgba(0,0,0,0.2)' : '0 4px 12px rgba(0,0,0,0.04)',
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                         <div style={{
-                          width: 36, height: 36, borderRadius: 8,
-                          background: `${color}18`,
+                          width: 48, height: 48, borderRadius: 12,
+                          background: `${color}15`,
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 16, fontWeight: 700, color,
+                          fontSize: 20, fontWeight: 700, color,
+                          flexShrink: 0,
                         }}>
                           {cat.title.charAt(0)}
                         </div>
-                        <span style={{ fontSize: 16, fontWeight: 700, color: isDark ? 'rgba(255,255,255,0.92)' : '#1a1a1a' }}>
-                          {cat.title}
-                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ 
+                            fontSize: 16, 
+                            fontWeight: 600, 
+                            color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a',
+                            marginBottom: 4,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {cat.title}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {chapterCount > 0 && (
+                              <span style={{ 
+                                fontSize: 12, 
+                                color: isDark ? 'rgba(255,255,255,0.4)' : '#999',
+                                background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+                                padding: '2px 8px',
+                                borderRadius: 4,
+                              }}>
+                                {chapterCount} 章节
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {chapterCount > 0 && (
-                          <span style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.35)' : '#bbb' }}>
-                            {chapterCount} 章
-                          </span>
-                        )}
-                        <RightOutlined style={{ fontSize: 11, color: isDark ? 'rgba(255,255,255,0.25)' : '#ccc', opacity: isHovered ? 1 : 0, transition: 'opacity 0.2s' }} />
+                      <div style={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: 8,
+                        background: isHovered ? `${color}15` : 'transparent',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        transition: 'all 0.2s',
+                      }}>
+                        <ArrowRightOutlined style={{ 
+                          fontSize: 12, 
+                          color: isHovered ? color : (isDark ? 'rgba(255,255,255,0.3)' : '#ccc'),
+                          transform: isHovered ? 'translateX(2px)' : 'none',
+                          transition: 'all 0.2s',
+                        }} />
                       </div>
                     </div>
-                    <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, color: isDark ? 'rgba(255,255,255,0.50)' : '#888' }}>
+                    <p style={{ 
+                      margin: 0, 
+                      fontSize: 14, 
+                      lineHeight: 1.6, 
+                      color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+                      overflow: 'hidden',
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                    }}>
                       {cat.desc || '暂无描述'}
                     </p>
                   </div>
@@ -472,22 +754,39 @@ const HomePage: React.FC = () => {
         </div>
 
         {/* ==================== 训练模式区 ==================== */}
-        <div style={{ width: '100%', maxWidth: 1060 }}>
+        <div id="training-section" style={{ width: '100%', maxWidth: 1060, marginBottom: 80 }}>
           {/* 区域标题 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: 8,
-              background: isDark ? 'rgba(250,173,20,0.15)' : 'rgba(250,173,20,0.10)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+          <div style={{ marginBottom: 28 }}>
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 12,
+              marginBottom: 8,
             }}>
-              <ThunderboltOutlined style={{ fontSize: 16, color: '#faad14' }} />
-            </div>
-            <div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: isDark ? 'rgba(255,255,255,0.92)' : '#1a1a1a' }}>
-                编程训练
+              <div style={{
+                width: 40, height: 40, borderRadius: 10,
+                background: 'linear-gradient(135deg, #faad14 0%, #d48806 100%)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(250, 173, 20, 0.3)',
+              }}>
+                <ThunderboltOutlined style={{ fontSize: 18, color: '#fff' }} />
               </div>
-              <div style={{ fontSize: 12, color: isDark ? 'rgba(255,255,255,0.45)' : '#999', marginTop: 1 }}>
-                AI 出题 + AI 评判，选择科目开始刷题
+              <div>
+                <div style={{ 
+                  fontSize: 22, 
+                  fontWeight: 700, 
+                  color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a',
+                  letterSpacing: -0.3,
+                }}>
+                  编程训练
+                </div>
+                <div style={{ 
+                  fontSize: 14, 
+                  color: isDark ? 'rgba(255,255,255,0.5)' : '#888',
+                  marginTop: 2,
+                }}>
+                  AI 出题 + AI 评判，选择科目开始刷题
+                </div>
               </div>
             </div>
           </div>
@@ -495,8 +794,8 @@ const HomePage: React.FC = () => {
           {/* 科目卡片网格 */}
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: 12,
+            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+            gap: 16,
           }}>
             {subjects.map((sub) => {
               const isHovered = hoveredSubjectId === sub.id;
@@ -507,63 +806,249 @@ const HomePage: React.FC = () => {
                   onMouseLeave={() => setHoveredSubjectId(null)}
                   onClick={() => navigate(`/training/${sub.id}`)}
                   style={{
-                    padding: '14px 16px',
-                    borderRadius: 12,
+                    padding: 20,
+                    borderRadius: 14,
                     cursor: 'pointer',
                     border: `1px solid ${
                       isHovered
-                        ? isDark ? `${sub.color}66` : sub.color
+                        ? isDark ? `${sub.color}60` : sub.color
                         : isDark ? 'rgba(255,255,255,0.08)' : '#e8e8e8'
                     }`,
                     background: isDark
                       ? isHovered ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)'
                       : isHovered ? '#fff' : 'rgba(255,255,255,0.6)',
                     transition: 'all 0.2s ease',
-                    transform: isHovered ? 'translateY(-2px)' : 'none',
+                    transform: isHovered ? 'translateY(-4px)' : 'none',
                     boxShadow: isHovered
-                      ? isDark ? '0 6px 20px rgba(0,0,0,0.25)' : '0 6px 20px rgba(0,0,0,0.06)'
-                      : 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
+                      ? isDark ? `0 12px 28px rgba(0,0,0,0.35), 0 0 0 1px ${sub.color}30` : `0 12px 28px rgba(0,0,0,0.08), 0 0 0 1px ${sub.color}20`
+                      : isDark ? '0 4px 12px rgba(0,0,0,0.2)' : '0 4px 12px rgba(0,0,0,0.04)',
                   }}
                 >
-                  <div style={{
-                    width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-                    background: `${sub.color}14`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 20,
-                  }}>
-                    {sub.icon}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div style={{
-                      fontSize: 14, fontWeight: 650,
-                      color: isDark ? 'rgba(255,255,255,0.90)' : '#1a1a1a',
-                      marginBottom: 2,
+                      width: 44, height: 44, borderRadius: 10, flexShrink: 0,
+                      background: `${sub.color}14`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 22,
+                      transition: 'all 0.2s',
+                      transform: isHovered ? 'scale(1.1)' : 'scale(1)',
                     }}>
-                      {sub.name}
+                      {sub.icon}
                     </div>
-                    <div style={{
-                      fontSize: 11.5, lineHeight: 1.4,
-                      color: isDark ? 'rgba(255,255,255,0.40)' : '#999',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {sub.desc.split('，')[0]}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: 15, fontWeight: 600,
+                        color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a',
+                        marginBottom: 4,
+                      }}>
+                        {sub.name}
+                      </div>
+                      <div style={{
+                        fontSize: 12, lineHeight: 1.4,
+                        color: isDark ? 'rgba(255,255,255,0.45)' : '#999',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {sub.desc.split('，')[0]}
+                      </div>
                     </div>
                   </div>
-                  <RightOutlined style={{
-                    fontSize: 11, flexShrink: 0,
-                    color: isDark ? 'rgba(255,255,255,0.20)' : '#ccc',
-                    opacity: isHovered ? 1 : 0,
-                    transition: 'opacity 0.2s',
-                  }} />
                 </div>
               );
             })}
           </div>
         </div>
       </div>
+
+      {/* ===== 底部联系我们区域 ===== */}
+      <footer style={{
+        background: isDark 
+          ? 'linear-gradient(180deg, rgba(11,18,32,0) 0%, rgba(11,18,32,1) 100%)'
+          : 'linear-gradient(180deg, rgba(245,247,250,0) 0%, rgba(228,233,240,1) 100%)',
+        borderTop: `1px solid ${isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'}`,
+        padding: '60px 32px 40px',
+      }}>
+        <div style={{
+          maxWidth: 1060,
+          margin: '0 auto',
+        }}>
+          {/* 主要内容区 */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gap: 40,
+            marginBottom: 48,
+          }}>
+            {/* 品牌介绍 */}
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <div
+                  style={{
+                    width: 32, height: 32, borderRadius: 8,
+                    background: 'linear-gradient(135deg, #1677ff 0%, #52c41a 100%)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <CodeOutlined style={{ fontSize: 16, color: '#fff' }} />
+                </div>
+                <span style={{ 
+                  fontWeight: 700, 
+                  fontSize: 18, 
+                  color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a', 
+                }}>
+                  码力学社
+                </span>
+              </div>
+              <p style={{
+                fontSize: 14,
+                lineHeight: 1.7,
+                color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+                margin: 0,
+              }}>
+                AI 驱动的编程学习平台，致力于让每个人都能高效、系统地掌握编程技能。
+              </p>
+            </div>
+
+            {/* 快速链接 */}
+            <div>
+              <h4 style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: isDark ? 'rgba(255,255,255,0.9)' : '#333',
+                marginBottom: 16,
+              }}>快速链接</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <a href="#teaching-section" style={{
+                  fontSize: 14,
+                  color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+                  textDecoration: 'none',
+                }}>教学模块</a>
+                <a href="#training-section" style={{
+                  fontSize: 14,
+                  color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+                  textDecoration: 'none',
+                }}>编程训练</a>
+                {user && (
+                  <span onClick={() => navigate('/settings')} style={{
+                    fontSize: 14,
+                    color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+                    cursor: 'pointer',
+                  }}>个人设置</span>
+                )}
+              </div>
+            </div>
+
+            {/* 联系我们 */}
+            <div>
+              <h4 style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: isDark ? 'rgba(255,255,255,0.9)' : '#333',
+                marginBottom: 16,
+              }}>联系我们</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <WechatOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+                  <span style={{
+                    fontSize: 14,
+                    color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+                  }}>微信：扫码添加</span>
+                </div>
+                <div style={{
+                  width: 120,
+                  height: 120,
+                  borderRadius: 12,
+                  background: '#fff',
+                  border: `1px solid ${isDark ? 'rgba(255,255,255,0.1)' : '#e8e8e8'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                }}>
+                  <img
+                    src="/WechatIMG.jpg"
+                    alt="微信二维码"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                </div>
+                <p style={{
+                  fontSize: 12,
+                  color: isDark ? 'rgba(255,255,255,0.4)' : '#999',
+                  margin: '4px 0 0 0',
+                }}>添加微信获取最新资讯</p>
+              </div>
+            </div>
+
+            {/* 法律信息 */}
+            <div>
+              <h4 style={{
+                fontSize: 14,
+                fontWeight: 600,
+                color: isDark ? 'rgba(255,255,255,0.9)' : '#333',
+                marginBottom: 16,
+              }}>法律信息</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <span onClick={() => navigate('/terms')} style={{
+                  fontSize: 14,
+                  color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}>
+                  <FileTextOutlined style={{ fontSize: 14 }} />
+                  用户协议
+                </span>
+                <span onClick={() => navigate('/privacy')} style={{
+                  fontSize: 14,
+                  color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}>
+                  <SafetyOutlined style={{ fontSize: 14 }} />
+                  隐私政策
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 分割线 */}
+          <div style={{
+            height: 1,
+            background: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+            marginBottom: 24,
+          }} />
+
+          {/* 底部版权 */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 16,
+          }}>
+            <div style={{
+              fontSize: 13,
+              color: isDark ? 'rgba(255,255,255,0.4)' : '#999',
+            }}>
+              © 2025 码力学社. All rights reserved.
+            </div>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <span style={{
+                fontSize: 13,
+                color: isDark ? 'rgba(255,255,255,0.4)' : '#999',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}>
+                <MailOutlined />
+                contact@ailearn.dev
+              </span>
+            </div>
+          </div>
+        </div>
+      </footer>
 
       {/* ===== 创建模块弹窗 ===== */}
       <Modal
@@ -572,32 +1057,42 @@ const HomePage: React.FC = () => {
         onCancel={closeCreateModal}
         footer={null}
         width={560}
-        destroyOnHidden
+        destroyOnClose
       >
         {createStep === 'input' && (
           <div>
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ marginBottom: 6, fontWeight: 500 }}>模块名称 *</div>
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 14 }}>模块名称 *</div>
               <Input
                 placeholder="例如：Go 语言、Python 编程、数据结构与算法"
                 value={newTitle}
                 onChange={e => setNewTitle(e.target.value)}
                 maxLength={50}
+                size="large"
+                style={{ borderRadius: 8 }}
               />
             </div>
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ marginBottom: 6, fontWeight: 500 }}>补充描述（可选）</div>
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 8, fontWeight: 500, fontSize: 14 }}>补充描述（可选）</div>
               <TextArea
                 placeholder="描述这个模块的学习目标、适合人群等，AI 会参考此信息生成大纲"
                 value={newDesc}
                 onChange={e => setNewDesc(e.target.value)}
-                rows={3}
+                rows={4}
                 maxLength={500}
+                style={{ borderRadius: 8 }}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <Button onClick={closeCreateModal}>取消</Button>
-              <Button type="primary" onClick={handleCreate} disabled={!newTitle.trim()}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <Button size="large" onClick={closeCreateModal} style={{ borderRadius: 8 }}>取消</Button>
+              <Button 
+                type="primary" 
+                size="large" 
+                onClick={handleCreate} 
+                disabled={!newTitle.trim()}
+                icon={<ThunderboltOutlined />}
+                style={{ borderRadius: 8 }}
+              >
                 AI 生成并创建
               </Button>
             </div>
@@ -606,16 +1101,22 @@ const HomePage: React.FC = () => {
 
         {createStep === 'generating' && (
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
               <Spin size="small" />
-              <span>AI 正在为「{newTitle}」生成课程大纲...</span>
+              <span style={{ fontSize: 15 }}>AI 正在为「{newTitle}」生成课程大纲...</span>
             </div>
             {generateProgress && (
               <div
                 style={{
-                  fontSize: 12, fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all',
-                  lineHeight: 1.5, maxHeight: 300, overflow: 'auto',
-                  padding: 12, borderRadius: 8,
+                  fontSize: 13, 
+                  fontFamily: 'monospace', 
+                  whiteSpace: 'pre-wrap', 
+                  wordBreak: 'break-all',
+                  lineHeight: 1.6, 
+                  maxHeight: 320, 
+                  overflow: 'auto',
+                  padding: 16, 
+                  borderRadius: 10,
                   background: isDark ? 'rgba(0,0,0,0.2)' : '#f5f5f5',
                   border: `1px solid ${isDark ? 'rgba(255,255,255,0.10)' : '#e8e8e8'}`,
                 }}
@@ -627,9 +1128,9 @@ const HomePage: React.FC = () => {
         )}
 
         {createStep === 'creating' && (
-          <div style={{ textAlign: 'center', padding: '30px 0' }}>
-            <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} />} />
-            <div style={{ marginTop: 12 }}>正在创建目录结构...</div>
+          <div style={{ textAlign: 'center', padding: '40px 0' }}>
+            <Spin indicator={<LoadingOutlined style={{ fontSize: 32 }} />} />
+            <div style={{ marginTop: 16, fontSize: 15 }}>正在创建目录结构...</div>
           </div>
         )}
       </Modal>
