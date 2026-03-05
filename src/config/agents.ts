@@ -1,35 +1,30 @@
 // AILearn 专用 Agent 配置
-// 这些 Agent 是通过 community 后端 API 创建的，ID 和 api_key 在此配置
+// 通过 api_name 直接调用 Agent，无需暴露 agent_id 和 api_key
 
 export const AGENT_CONFIG = {
   // 题目生成器 Agent
   exerciseGenerator: {
-    agent_id: 1,
-    api_key: '$2a$10$gbpjZYyprHG2zWc.O5Gjaeip09MWFhdSlIn/jv2FyYv4yDEJfCA/m',
+    api_name: 'ailearn-exercise-generator',
     name: 'AILearn-题目生成器',
   },
   // 代码评判官 Agent
   codeJudge: {
-    agent_id: 2,
-    api_key: '$2a$10$ZPZeAeUxrysHNjmsiYtMy.ipQXtUzTF9vJg1oh2OgusvISXspGwmC',
+    api_name: 'ailearn-code-judge',
     name: 'AILearn-代码评判官',
   },
   // 教学助手 Agent
   teachingAssistant: {
-    agent_id: 3,
-    api_key: '$2a$10$jiubMvYKzSrVLTZLY0zz2O1G5GGpHj1w./xO5E0k/HM8urCy0cGc2',
+    api_name: 'ailearn-teaching-assistant',
     name: 'AILearn-教学助手',
   },
   // 课程大纲生成器 Agent
   outlineGenerator: {
-    agent_id: 4,
-    api_key: '$2a$10$4SEO1K7C2ErznVYMkta3kONLeIKRcxoUTgnWNiKoKZq.6p/vdZk..',
+    api_name: 'ailearn-outline-generator',
     name: 'AILearn-课程大纲生成器',
   },
   // 教学内容生成器 Agent
   contentGenerator: {
-    agent_id: 5,
-    api_key: '$2a$10$TaNixAgsoyszIyOcUgIIEO2H2jiT56NS1A60yogZ9zgCKzjG0GOkm',
+    api_name: 'ailearn-content-generator',
     name: 'AILearn-教学内容生成器',
   },
 } as const;

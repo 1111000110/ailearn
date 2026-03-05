@@ -19,6 +19,7 @@ import {
   RobotOutlined, ClearOutlined, LoadingOutlined, BookOutlined,
   RightOutlined, CaretRightOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   UndoOutlined, LoginOutlined, ThunderboltOutlined, DownOutlined,
+  FireOutlined,
 } from '@ant-design/icons';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -92,7 +93,7 @@ interface BgTask {
 // ==================== 工具函数 ====================
 
 function callAgentStream(
-  agentId: number, apiKey: string, content: string,
+  apiName: string, content: string,
   onChunk: (text: string) => void,
   onDone: (fullText: string) => void,
   onError: (err: string) => void,
@@ -100,9 +101,9 @@ function callAgentStream(
   const sessionId = `ailearn_teach_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   let accumulated = '';
   const client = runAgentStream({
-    agent_id: agentId, api_key: apiKey,
+    api_name: apiName,
     agent_message: {
-      agent_id: agentId, agent_session_id: sessionId,
+      agent_session_id: sessionId,
       message_agent_session_id: sessionId, role: 'user',
       message_type: 0, message_content: content,
     },
@@ -286,10 +287,14 @@ const TeachingPage: React.FC = () => {
   // ===== 自动滚动（仅对话） =====
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
-  // ===== 当前查看的小节对应的后台任务 =====
+  // ===== 当前查看的小节 =====
   const activeCatalogueId = activeSection
     ? chapters[activeSection.chapterIdx]?.sections[activeSection.sectionIdx]?.catalogueId
     : null;
+  const currentSection = activeSection
+    ? chapters[activeSection.chapterIdx]?.sections[activeSection.sectionIdx]
+    : null;
+  const canTrain = !!(currentSection && currentSection.postId && currentSection.postId !== '0');
 
   // ===== 同步后台任务的流式进度到当前视图 =====
   useEffect(() => {
@@ -442,10 +447,10 @@ const TeachingPage: React.FC = () => {
     forceUpdate(n => n + 1);
 
     const prompt = `请为「${rootTitleRef.current}」课程中的「${chapter.title} - ${section.title}」生成详细的教学内容。${section.desc ? `补充描述为：${section.desc}` : ''}`;
-    const { agent_id, api_key } = AGENT_CONFIG.contentGenerator;
+    const { api_name } = AGENT_CONFIG.contentGenerator;
 
     task.streamClient = callAgentStream(
-      agent_id, api_key, prompt,
+      api_name, prompt,
       (text) => {
         task.progress = text;
         // 不 setState，靠定时器同步
@@ -641,7 +646,7 @@ const TeachingPage: React.FC = () => {
   // ===== AI 对话 =====
   const handleChatSend = () => {
     if (!chatInput.trim() || isChatStreaming) return;
-    const { agent_id, api_key } = AGENT_CONFIG.teachingAssistant;
+    const { api_name } = AGENT_CONFIG.teachingAssistant;
 
     let userContent = chatInput;
     if (isFirstChatRef.current && includeContext && sectionContent && activeSection) {
@@ -663,8 +668,8 @@ ${sectionContent.slice(0, 3000)}
     const sessionId = chatSessionIdRef.current;
     chatStreamRef.current?.close();
     const client = runAgentStream({
-      agent_id, api_key,
-      agent_message: { agent_id, agent_session_id: sessionId, message_agent_session_id: sessionId, role: 'user', message_type: 0, message_content: userContent },
+      api_name,
+      agent_message: { agent_session_id: sessionId, message_agent_session_id: sessionId, role: 'user', message_type: 0, message_content: userContent },
     });
     chatStreamRef.current = client;
     client.addEventListener('message', (data) => {
@@ -694,15 +699,15 @@ ${sectionContent.slice(0, 3000)}
   const handleRunCode = (codeStr: string, lang: string) => {
     if (!isAiPanelVisible) { setRightWidth(prevRightWidthRef.current || 0.24); setIsAiPanelVisible(true); }
     const prompt = `请执行以下 ${lang} 代码并返回运行结果：\n\n\`\`\`${lang}\n${codeStr}\n\`\`\``;
-    const { agent_id, api_key } = AGENT_CONFIG.teachingAssistant;
+    const { api_name } = AGENT_CONFIG.teachingAssistant;
     setChatMessages(prev => [...prev, { role: 'user', content: `▶ 运行代码:\n\`\`\`${lang}\n${codeStr}\n\`\`\`` }]);
     setIsChatStreaming(true);
     chatAssistantRef.current = '';
     const sessionId = chatSessionIdRef.current;
     chatStreamRef.current?.close();
     const client = runAgentStream({
-      agent_id, api_key,
-      agent_message: { agent_id, agent_session_id: sessionId, message_agent_session_id: sessionId, role: 'user', message_type: 0, message_content: prompt },
+      api_name,
+      agent_message: { agent_session_id: sessionId, message_agent_session_id: sessionId, role: 'user', message_type: 0, message_content: prompt },
     });
     chatStreamRef.current = client;
     client.addEventListener('message', (data) => {
@@ -723,6 +728,17 @@ ${sectionContent.slice(0, 3000)}
     client.addEventListener('error', () => { setIsChatStreaming(false); chatStreamRef.current = null; });
   };
 
+  // ===== 本章训练：跳转到训练页面 =====
+  const handleStartTraining = useCallback(() => {
+    if (!currentSection?.postId || currentSection.postId === '0') return;
+    navigate(`/training/post/${currentSection.postId}`, {
+      state: {
+        from: `/teaching/${catalogueId}`,
+        title: `${currentSection.title} - 本章训练`,
+      },
+    });
+  }, [currentSection, navigate, catalogueId]);
+
   // ===== heading 渲染器 =====
   const createHeadingRenderer = (level: number) => {
     return ({ children, ...props }: any) => {
@@ -742,9 +758,6 @@ ${sectionContent.slice(0, 3000)}
     );
   }
 
-  const currentSection = activeSection
-    ? chapters[activeSection.chapterIdx]?.sections[activeSection.sectionIdx]
-    : null;
   const needLogin = currentSection && (!currentSection.postId || currentSection.postId === '0') && !user;
 
   // ============================= JSX =============================
@@ -766,6 +779,26 @@ ${sectionContent.slice(0, 3000)}
           </span>
         </div>
         <div style={{ flex: 1 }} />
+
+        {/* 本章训练按钮 */}
+        {user && (
+          <Tooltip title={canTrain ? '根据本章内容生成练习题' : '当前小节无文章内容，无法训练'}>
+            <Button
+              size="small"
+              icon={<FireOutlined />}
+              disabled={!canTrain}
+              onClick={handleStartTraining}
+              style={{
+                borderRadius: 6, fontSize: 12,
+                border: `1px solid ${canTrain ? (colors.isDark ? 'rgba(250,82,82,0.5)' : '#ff4d4f') : (colors.isDark ? 'rgba(255,255,255,0.1)' : '#d9d9d9')}`,
+                color: canTrain ? (colors.isDark ? '#ff6b6b' : '#ff4d4f') : colors.muted,
+                background: canTrain ? (colors.isDark ? 'rgba(250,82,82,0.08)' : 'rgba(255,77,79,0.06)') : 'transparent',
+              }}
+            >
+              本章训练
+            </Button>
+          </Tooltip>
+        )}
 
         {/* 一键生成按钮 / 进度 */}
         {user && chapters.length > 0 && (

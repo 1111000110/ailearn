@@ -150,17 +150,15 @@ const HomePage: React.FC = () => {
     // AI Prompt：要求返回 JSON 格式的课程大纲
     const prompt = `请为「${newTitle.trim()}」生成专业的教学大纲。${newDesc ? `补充描述为：${newDesc}` : ''}`;
 
-    const { agent_id, api_key } = AGENT_CONFIG.outlineGenerator;
+    const { api_name } = AGENT_CONFIG.outlineGenerator;
     let accumulated = '';
 
     // 构建流式请求
     const sessionId = `create_module_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     streamRef.current?.close();
     const client = runAgentStream({
-      agent_id,
-      api_key,
+      api_name,
       agent_message: {
-        agent_id,
         agent_session_id: sessionId,
         message_agent_session_id: sessionId,
         role: 'user',
@@ -520,6 +518,62 @@ const HomePage: React.FC = () => {
             </div>
           ))}
         </div>
+
+        {/* ==================== 未登录引导横幅 ==================== */}
+        {!user && (
+          <div style={{
+            width: '100%',
+            maxWidth: 1060,
+            marginBottom: 56,
+            padding: '28px 36px',
+            borderRadius: 20,
+            background: isDark
+              ? 'linear-gradient(135deg, rgba(22,119,255,0.12) 0%, rgba(82,196,26,0.08) 100%)'
+              : 'linear-gradient(135deg, rgba(22,119,255,0.06) 0%, rgba(82,196,26,0.04) 100%)',
+            border: `1px solid ${isDark ? 'rgba(22,119,255,0.2)' : 'rgba(22,119,255,0.15)'}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 24,
+            backdropFilter: 'blur(8px)',
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 17,
+                fontWeight: 700,
+                color: isDark ? 'rgba(255,255,255,0.95)' : '#1a1a1a',
+                marginBottom: 8,
+              }}>
+                登录后解锁完整体验
+              </div>
+              <div style={{
+                fontSize: 14,
+                lineHeight: 1.7,
+                color: isDark ? 'rgba(255,255,255,0.55)' : '#666',
+              }}>
+                创建专属学习模块、AI 智能出题与代码评判、本章内容针对性训练，让学习更系统高效
+              </div>
+            </div>
+            <Button
+              type="primary"
+              size="large"
+              onClick={() => navigate('/auth')}
+              style={{
+                height: 44,
+                padding: '0 32px',
+                borderRadius: 12,
+                fontSize: 15,
+                fontWeight: 600,
+                background: 'linear-gradient(135deg, #1677ff 0%, #0958d9 100%)',
+                border: 'none',
+                boxShadow: '0 4px 14px rgba(22, 119, 255, 0.35)',
+                flexShrink: 0,
+              }}
+            >
+              立即登录
+            </Button>
+          </div>
+        )}
 
         {/* ==================== 教学模块区 ==================== */}
         <div id="teaching-section" style={{ width: '100%', maxWidth: 1060, marginBottom: 72 }}>

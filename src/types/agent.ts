@@ -52,6 +52,7 @@ export interface AgentChatConfig {
 // Agent 详情
 export interface AgentDetail {
   agent_id: number;
+  api_name?: string;
   api_key?: string;
   name: string;
   desc?: string;
@@ -72,7 +73,7 @@ export interface MessageTool {
 
 // Agent 消息详情
 export interface AgentMessageDetail {
-  agent_id: number;
+  agent_id?: number;
   agent_session_id: string;
   message_agent_session_id: string;
   agent_chat_id?: number;
@@ -97,10 +98,10 @@ export interface GetAgentListResp {
 }
 
 export interface RunAgentReq {
-  agent_id: number;
-  api_key: string;
+  api_name: string;
   agent_message: AgentMessageDetail;
   prompt_replacement?: Record<string, string>;
+  rag_parameters?: Record<string, string>;
 }
 
 export interface RunAgentResp {
@@ -108,10 +109,10 @@ export interface RunAgentResp {
 }
 
 export interface RunAgentStreamReq {
-  agent_id: number;
-  api_key: string;
+  api_name: string;
   agent_message: AgentMessageDetail;
   prompt_replacement?: Record<string, string>;
+  rag_parameters?: Record<string, string>;
 }
 
 export interface RunAgentStreamResp {
