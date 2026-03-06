@@ -781,23 +781,30 @@ ${sectionContent.slice(0, 3000)}
         <div style={{ flex: 1 }} />
 
         {/* 本章训练按钮 */}
-        {user && (
-          <Tooltip title={canTrain ? '根据本章内容生成练习题' : '当前小节无文章内容，无法训练'}>
-            <Button
-              size="small"
-              icon={<FireOutlined />}
-              disabled={!canTrain}
-              onClick={handleStartTraining}
-              style={{
-                borderRadius: 6, fontSize: 12,
-                border: `1px solid ${canTrain ? (colors.isDark ? 'rgba(250,82,82,0.5)' : '#ff4d4f') : (colors.isDark ? 'rgba(255,255,255,0.1)' : '#d9d9d9')}`,
-                color: canTrain ? (colors.isDark ? '#ff6b6b' : '#ff4d4f') : colors.muted,
-                background: canTrain ? (colors.isDark ? 'rgba(250,82,82,0.08)' : 'rgba(255,77,79,0.06)') : 'transparent',
-              }}
-            >
-              本章训练
-            </Button>
-          </Tooltip>
+        <Tooltip title={!user ? '登录后可用' : canTrain ? '根据本章内容生成练习题' : '当前小节无文章内容，无法训练'}>
+          <Button
+            size="small"
+            icon={<FireOutlined />}
+            disabled={!user || !canTrain}
+            onClick={handleStartTraining}
+            style={{
+              borderRadius: 6, fontSize: 12,
+              border: `1px solid ${user && canTrain ? (colors.isDark ? 'rgba(250,82,82,0.5)' : '#ff4d4f') : (colors.isDark ? 'rgba(255,255,255,0.1)' : '#d9d9d9')}`,
+              color: user && canTrain ? (colors.isDark ? '#ff6b6b' : '#ff4d4f') : colors.muted,
+              background: user && canTrain ? (colors.isDark ? 'rgba(250,82,82,0.08)' : 'rgba(255,77,79,0.06)') : 'transparent',
+            }}
+          >
+            本章训练
+          </Button>
+        </Tooltip>
+        {!user && (
+          <span style={{
+            fontSize: 11,
+            color: colors.isDark ? 'rgba(255,255,255,0.4)' : '#888',
+            marginLeft: 4,
+          }}>
+            登录后使用
+          </span>
         )}
 
         {/* 一键生成按钮 / 进度 */}
@@ -1092,47 +1099,106 @@ ${sectionContent.slice(0, 3000)}
                 </Space>
               </div>
               <div style={{ flex: 1, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {chatMessages.length === 0 && (
-                  <div style={{ textAlign: 'center', padding: '40px 16px', color: colors.muted, fontSize: 13 }}>
-                    <RobotOutlined style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }} />
-                    <div>对教学内容有疑问？直接问 AI</div>
-                    <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>开启「上下文」后，AI 能看到当前章节内容</div>
-                  </div>
-                )}
-                {chatMessages.map((msg, i) => (
-                  <div key={i} style={{
-                    maxWidth: '92%', alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
-                    padding: '8px 12px', borderRadius: 12, fontSize: 13, lineHeight: 1.6,
-                    border: `1px solid ${msg.role === 'user' ? (colors.isDark ? 'rgba(110,231,255,0.22)' : '#1677ff') : colors.stroke}`,
-                    background: msg.role === 'user' ? (colors.isDark ? 'rgba(110,231,255,0.08)' : '#e6f4ff') : (colors.isDark ? 'rgba(255,255,255,0.03)' : '#fff'),
-                    color: colors.text,
+                {!user ? (
+                  <div style={{
+                    flex: 1,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '40px 24px',
+                    textAlign: 'center',
                   }}>
-                    <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{msg.content}</ReactMarkdown></div>
+                    <div style={{
+                      width: 72,
+                      height: 72,
+                      borderRadius: 20,
+                      background: colors.isDark ? 'rgba(110,231,255,0.08)' : 'rgba(22,119,255,0.06)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: 20,
+                    }}>
+                      <RobotOutlined style={{ fontSize: 32, color: colors.accent, opacity: 0.8 }} />
+                    </div>
+                    <div style={{
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: colors.text,
+                      marginBottom: 8,
+                    }}>
+                      AI 助教
+                    </div>
+                    <div style={{
+                      fontSize: 13,
+                      lineHeight: 1.6,
+                      color: colors.muted,
+                      marginBottom: 20,
+                      maxWidth: 240,
+                    }}>
+                      登录后随时向 AI 提问，获取个性化的学习指导和代码解答
+                    </div>
+                    <Button
+                      type="primary"
+                      size="middle"
+                      icon={<LoginOutlined />}
+                      onClick={() => navigate('/auth')}
+                      style={{
+                        borderRadius: 8,
+                        height: 36,
+                        padding: '0 20px',
+                      }}
+                    >
+                      登录后使用
+                    </Button>
                   </div>
-                ))}
-                {isChatStreaming && chatMessages[chatMessages.length - 1]?.role !== 'assistant' && (
-                  <div style={{ alignSelf: 'flex-start', padding: '8px 12px' }}>
-                    <Spin size="small" />
-                    <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>思考中...</Text>
-                  </div>
+                ) : (
+                  <>
+                    {chatMessages.length === 0 && (
+                      <div style={{ textAlign: 'center', padding: '40px 16px', color: colors.muted, fontSize: 13 }}>
+                        <RobotOutlined style={{ fontSize: 32, marginBottom: 12, opacity: 0.3 }} />
+                        <div>对教学内容有疑问？直接问 AI</div>
+                        <div style={{ marginTop: 6, fontSize: 12, opacity: 0.7 }}>开启「上下文」后，AI 能看到当前章节内容</div>
+                      </div>
+                    )}
+                    {chatMessages.map((msg, i) => (
+                      <div key={i} style={{
+                        maxWidth: '92%', alignSelf: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                        padding: '8px 12px', borderRadius: 12, fontSize: 13, lineHeight: 1.6,
+                        border: `1px solid ${msg.role === 'user' ? (colors.isDark ? 'rgba(110,231,255,0.22)' : '#1677ff') : colors.stroke}`,
+                        background: msg.role === 'user' ? (colors.isDark ? 'rgba(110,231,255,0.08)' : '#e6f4ff') : (colors.isDark ? 'rgba(255,255,255,0.03)' : '#fff'),
+                        color: colors.text,
+                      }}>
+                        <div className="markdown-body"><ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{msg.content}</ReactMarkdown></div>
+                      </div>
+                    ))}
+                    {isChatStreaming && chatMessages[chatMessages.length - 1]?.role !== 'assistant' && (
+                      <div style={{ alignSelf: 'flex-start', padding: '8px 12px' }}>
+                        <Spin size="small" />
+                        <Text type="secondary" style={{ marginLeft: 8, fontSize: 12 }}>思考中...</Text>
+                      </div>
+                    )}
+                    <div ref={chatEndRef} />
+                  </>
                 )}
-                <div ref={chatEndRef} />
               </div>
-              <div style={{
-                padding: 10, borderTop: `1px solid ${colors.stroke}`,
-                background: colors.isDark ? 'rgba(255,255,255,0.02)' : '#fff',
-                display: 'flex', gap: 8, flexShrink: 0,
-              }}>
-                <TextArea value={chatInput} onChange={e => setChatInput(e.target.value)}
-                  placeholder={includeContext ? '问 AI（携带教学内容上下文）...' : '问 AI...'}
-                  autoSize={{ minRows: 1, maxRows: 4 }}
-                  onPressEnter={e => { if (!e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
-                  disabled={isChatStreaming}
-                  style={{ flex: 1, borderRadius: 10, fontSize: 13, resize: 'none' }} />
-                <Button type="primary" icon={<SendOutlined />} onClick={handleChatSend}
-                  loading={isChatStreaming} disabled={!chatInput.trim() || isChatStreaming}
-                  style={{ borderRadius: 10, alignSelf: 'flex-end' }} />
-              </div>
+              {user && (
+                <div style={{
+                  padding: 10, borderTop: `1px solid ${colors.stroke}`,
+                  background: colors.isDark ? 'rgba(255,255,255,0.02)' : '#fff',
+                  display: 'flex', gap: 8, flexShrink: 0,
+                }}>
+                  <TextArea value={chatInput} onChange={e => setChatInput(e.target.value)}
+                    placeholder={includeContext ? '问 AI（携带教学内容上下文）...' : '问 AI...'}
+                    autoSize={{ minRows: 1, maxRows: 4 }}
+                    onPressEnter={e => { if (!e.shiftKey) { e.preventDefault(); handleChatSend(); } }}
+                    disabled={isChatStreaming}
+                    style={{ flex: 1, borderRadius: 10, fontSize: 13, resize: 'none' }} />
+                  <Button type="primary" icon={<SendOutlined />} onClick={handleChatSend}
+                    loading={isChatStreaming} disabled={!chatInput.trim() || isChatStreaming}
+                    style={{ borderRadius: 10, alignSelf: 'flex-end' }} />
+                </div>
+              )}
             </div>
           </section>
         )}
